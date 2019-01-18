@@ -215,6 +215,16 @@ fn write_modifies(engine: &Engines, modifies: Vec<Modify>) -> Result<()> {
                     wb.put_cf(handle, k.as_encoded(), &v)
                 }
             }
+            Modify::Update(cf, k, v) => {
+                if cf == CF_DEFAULT {
+                    trace!("RocksEngine: update {}, {}", k, escape(&v));
+                    wb.merge(k.as_encoded(), &v)
+                } else {
+                    trace!("RocksEngine: update_cf {}, {}, {}", cf, k, escape(&v));
+                    let handle = rocks::util::get_cf_handle(&engine.kv, cf)?;
+                    wb.merge_cf(handle, k.as_encoded(), &v)
+                }
+            }
             Modify::DeleteRange(cf, start_key, end_key, notify_only) => {
                 trace!(
                     "RocksEngine: delete_range_cf";
