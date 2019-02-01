@@ -1154,17 +1154,19 @@ impl<E: Engine> Storage<E> {
         const CMD: &str = "raw_batch_get";
         let engine = self.get_engine();
         let priority = readpool::Priority::from(ctx.get_priority());
-
         let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
 
-        let res = self.read_pool.future_execute(priority, move |ctxd| {
-            let mut _timer = {
-                let ctxd = ctxd.clone();
-                let mut thread_ctx = ctxd.current_thread_context_mut();
-                thread_ctx.start_command_duration_timer(CMD, priority)
-            };
+        let _timer = SCHED_HISTOGRAM_VEC.with_label_values(&[CMD]).start_coarse_timer();
+        let (callback, future) = util::future::paired_future_callback();
+        let val = engine.async_snapshot(&ctx, callback);
 
-            Self::async_snapshot(engine, &ctx)
+        let res = self.read_pool.future_execute(priority, move |ctxd| {
+            future::result(val)
+                .and_then(|_| future.map_err(|cancel| EngineError::Other(box_err!(cancel))))
+                .and_then(|(_ctx, result)| result)
+                // map storage::engine::Error -> storage::txn::Error -> storage::Error
+                .map_err(txn::Error::from)
+                .map_err(Error::from)
                 .and_then(move |snapshot: E::Snap| {
                     let mut thread_ctx = ctxd.current_thread_context_mut();
                     let _t_process = thread_ctx.start_processing_read_duration_timer(CMD);
@@ -1191,10 +1193,6 @@ impl<E: Engine> Storage<E> {
                     thread_ctx.collect_key_reads(CMD, stats.data.flow_stats.read_keys as u64);
                     thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
                     Ok(result)
-                })
-                .then(move |r| {
-                    _timer.observe_duration();
-                    r
                 })
         });
 
