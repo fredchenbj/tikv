@@ -1155,16 +1155,10 @@ impl<E: Engine> Storage<E> {
         let engine = self.get_engine();
 
         let _timer = SCHED_HISTOGRAM_VEC.with_label_values(&[CMD]).start_coarse_timer();
-        //let (callback, future) = util::future::paired_future_callback();
-//        let (tx, future) = oneshot::channel::<T>();
-//        let callback = box move |result| {
-//            let r = tx.send(result);
-//            if r.is_err() {
-//                warn!("paired_future_callback: Failed to send result to the future rx, discarded.");
-//            }
-//        };
-        engine.async_snapshot(&ctx, box move |result| {
+
+        let res = engine.async_snapshot(&ctx, box move |result| {
             future::result(result)
+                .map_err(|cancel| EngineError::Other(box_err!(cancel)))
                 .and_then(|(_ctx, result)| result)
                 // map storage::engine::Error -> storage::txn::Error -> storage::Error
                 .map_err(txn::Error::from)
@@ -1172,7 +1166,7 @@ impl<E: Engine> Storage<E> {
                 .and_then(move |snapshot: E::Snap| {
                     let priority = readpool::Priority::from(ctx.get_priority());
                     let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
-                    let val = self.read_pool.future_execute(priority, move |ctxd| {
+                    self.read_pool.future_execute(priority, move |ctxd| {
                         let mut _timer = {
                             let ctxd = ctxd.clone();
                             let mut thread_ctx = ctxd.current_thread_context_mut();
@@ -1204,12 +1198,12 @@ impl<E: Engine> Storage<E> {
                         thread_ctx.collect_key_reads(CMD, stats.data.flow_stats.read_keys as u64);
                         thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
                         Ok(result)
-                    });
-                    future::result(val)
-                        .map_err(|_| Error::SchedTooBusy)
-                        .flatten()
+                    })
                 })
-        })
+        });
+        future::result(res)
+            .map_err(|_| Error::SchedTooBusy)
+            .flatten()
     }
 
     /// Write a raw key to the storage.
