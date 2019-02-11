@@ -1157,7 +1157,7 @@ impl<E: Engine> Storage<E> {
         let _timer = SCHED_HISTOGRAM_VEC.with_label_values(&[CMD]).start_coarse_timer();
 
         let res = engine.async_snapshot(&ctx, box move |result| {
-            future::result(result)
+                result
                 .map_err(|cancel| EngineError::Other(box_err!(cancel)))
                 .and_then(|(_ctx, result)| result)
                 // map storage::engine::Error -> storage::txn::Error -> storage::Error
@@ -1198,12 +1198,11 @@ impl<E: Engine> Storage<E> {
                         thread_ctx.collect_key_reads(CMD, stats.data.flow_stats.read_keys as u64);
                         thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
                         Ok(result)
-                    })
-                })
+                    });
+                });
         });
         future::result(res)
             .map_err(|_| Error::SchedTooBusy)
-            .flatten()
     }
 
     /// Write a raw key to the storage.
