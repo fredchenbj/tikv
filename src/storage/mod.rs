@@ -29,6 +29,7 @@ use std::sync::{atomic, Arc, Mutex};
 use std::u64;
 
 use futures::{future, Future};
+use futures::sync::oneshot;
 use kvproto::errorpb;
 use kvproto::kvrpcpb::{CommandPri, Context, KeyRange, LockInfo};
 
@@ -1153,10 +1154,14 @@ impl<E: Engine> Storage<E> {
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
         const CMD: &str = "raw_batch_get";
         let engine = self.get_engine();
+        let priority = readpool::Priority::from(ctx.get_priority());
 
         let _timer = SCHED_HISTOGRAM_VEC.with_label_values(&[CMD]).start_coarse_timer();
 
+        let (tx, future) = oneshot::channel::<>();
+
         let res = engine.async_snapshot(&ctx, box move |result| {
+            let val = self.read_pool.future_execute(priority, move |ctxd| {
                 result
                 .map_err(|cancel| EngineError::Other(box_err!(cancel)))
                 .and_then(|(_ctx, result)| result)
@@ -1164,9 +1169,8 @@ impl<E: Engine> Storage<E> {
                 .map_err(txn::Error::from)
                 .map_err(Error::from)
                 .and_then(move |snapshot: E::Snap| {
-                    let priority = readpool::Priority::from(ctx.get_priority());
                     let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
-                    self.read_pool.future_execute(priority, move |ctxd| {
+
                         let mut _timer = {
                             let ctxd = ctxd.clone();
                             let mut thread_ctx = ctxd.current_thread_context_mut();
@@ -1198,11 +1202,15 @@ impl<E: Engine> Storage<E> {
                         thread_ctx.collect_key_reads(CMD, stats.data.flow_stats.read_keys as u64);
                         thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
                         Ok(result)
-                    });
+                    })
                 });
+            let r = tx.send(val);
+            if r.is_err() {
+                warn!("paired_future_callback: Failed to send result to the future rx, discarded.");
+            }
         });
-        future::result(res)
-            .map_err(|_| Error::SchedTooBusy)
+            future.map_err(|_| Error::SchedTooBusy)
+            .flatten()
     }
 
     /// Write a raw key to the storage.
