@@ -1105,44 +1105,58 @@ impl<E: Engine> Storage<E> {
         let engine = self.get_engine();
         let priority = readpool::Priority::from(ctx.get_priority());
 
-        let res = self.read_pool.future_execute(priority, move |ctxd| {
-            let mut _timer = {
-                let ctxd = ctxd.clone();
-                let mut thread_ctx = ctxd.current_thread_context_mut();
-                thread_ctx.start_command_duration_timer(CMD, priority)
-            };
+        let _timer = SCHED_HISTOGRAM_VEC
+            .with_label_values(&[CMD])
+            .start_coarse_timer();
 
-            Self::async_snapshot(engine, &ctx)
-                .and_then(move |snapshot: E::Snap| {
-                    let mut thread_ctx = ctxd.current_thread_context_mut();
-                    let _t_process = thread_ctx.start_processing_read_duration_timer(CMD);
-                    let cf = Self::rawkv_cf(&cf)?;
-                    // no scan_count for this kind of op.
+        let (tx, future) = oneshot::channel();
+        let readpool = self.read_pool.clone();
+        let region_id = ctx.get_region_id();
 
-                    let key_len = key.len();
-                    snapshot.get_cf(cf, &Key::from_encoded(key))
-                        // map storage::engine::Error -> storage::Error
-                        .map_err(Error::from)
-                        .map(|r| {
-                            if let Some(ref value) = r {
-                                let mut stats = Statistics::default();
-                                stats.data.flow_stats.read_keys = 1;
-                                stats.data.flow_stats.read_bytes = key_len + value.len();
-                                thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
-                                thread_ctx.collect_key_reads(CMD, 1);
-                            }
-                            r
-                        })
-                })
-                .then(move |r| {
-                    _timer.observe_duration();
-                    r
-                })
-        });
+        let cb = box move |(_, snapshot)| {
+            if let Ok(fut) = readpool.future_execute(priority, move |ctxd| {
+                future::result(snapshot)
+                    .map_err(txn::Error::from)
+                    .map_err(Error::from)
+                    .and_then(move |snapshot: E::Snap| {
+                        let mut thread_ctx = ctxd.current_thread_context_mut();
+                        let _t_process = thread_ctx.start_processing_read_duration_timer(CMD);
+                        let cf = Self::rawkv_cf(&cf)?;
+                        // no scan_count for this kind of op.
 
+                        let key_len = key.len();
+                        snapshot.get_cf(cf, &Key::from_encoded(key))
+                            // map storage::engine::Error -> storage::Error
+                            .map_err(Error::from)
+                            .map(|r| {
+                                if let Some(ref value) = r {
+                                    let mut stats = Statistics::default();
+                                    stats.data.flow_stats.read_keys = 1;
+                                    stats.data.flow_stats.read_bytes = key_len + value.len();
+                                    thread_ctx.collect_read_flow(region_id, &stats);
+                                    thread_ctx.collect_key_reads(CMD, 1);
+                                }
+                                r
+                            })
+                    })
+                    .and_then(move |res| {
+                        let r = tx.send(res);
+                        if r.is_err() {
+                            warn!("future callback: Failed to send result to the future rx, discarded.");
+                        }
+                        Ok(())
+                    })
+            }) {
+                fut.forget();
+            }
+        };
+
+        let res = engine.async_snapshot(&ctx, cb);
         future::result(res)
-            .map_err(|_| Error::SchedTooBusy)
+            .map(|_| future.map_err(|e| { EngineError::Other(box_err!(e))}))
             .flatten()
+            .map_err(|_| Error::SchedTooBusy)
+
     }
 
     /// Get the values of some raw keys in a batch.
