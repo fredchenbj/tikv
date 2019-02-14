@@ -28,8 +28,8 @@ use std::io::Error as IoError;
 use std::sync::{atomic, Arc, Mutex};
 use std::u64;
 
-use futures::{future, Future};
 use futures::sync::oneshot;
+use futures::{future, Future};
 use kvproto::errorpb;
 use kvproto::kvrpcpb::{CommandPri, Context, KeyRange, LockInfo};
 
@@ -1155,11 +1155,15 @@ impl<E: Engine> Storage<E> {
         const CMD: &str = "raw_batch_get";
         let engine = self.get_engine();
         let priority = readpool::Priority::from(ctx.get_priority());
-        let _timer = SCHED_HISTOGRAM_VEC.with_label_values(&[CMD]).start_coarse_timer();
+        let _timer = SCHED_HISTOGRAM_VEC
+            .with_label_values(&[CMD])
+            .start_coarse_timer();
 
-        let (tx, future) = oneshot::channel::<>();
-        let cb = box move |(cb_ctx, snapshot)| {
-            let val = self.read_pool.future_execute(priority, move |ctxd| {
+        let (tx, future) = oneshot::channel();
+        let readpool = self.read_pool.clone();
+        let region_id = ctx.get_region_id();
+        let cb = box move |(_, snapshot)| {
+            if let Ok(fut) = readpool.future_execute(priority, move |ctxd| {
                 future::result(snapshot)
                     .map_err(txn::Error::from)
                     .map_err(Error::from)
@@ -1188,19 +1192,25 @@ impl<E: Engine> Storage<E> {
                             })
                             .collect();
                         thread_ctx.collect_key_reads(CMD, stats.data.flow_stats.read_keys as u64);
-                        thread_ctx.collect_read_flow(ctx.get_region_id(), &stats);
+                        thread_ctx.collect_read_flow(region_id, &stats);
                         Ok(result)
                     })
-            });
-            let r = tx.send(val);
-            if r.is_err() {
-                warn!("future_callback: Failed to send result to the future rx, discarded.");
+                    .and_then(move |res| {
+                        let r = tx.send(res);
+                        if r.is_err() {
+                            warn!("future_callback: Failed to send result to the future rx, discarded.");
+                        }
+                        Ok(())
+                    })
+            }) {
+                fut.forget();
             }
         };
 
         let res = engine.async_snapshot(&ctx, cb);
         future::result(res)
-            .and_then(|_| future.map_err(|cancel| EngineError::Other(box_err!(cancel))))
+            .map(|_| future.map_err(|e| EngineError::Other(box_err!(e))))
+            .flatten()
             .map_err(|_| Error::SchedTooBusy)
     }
 
