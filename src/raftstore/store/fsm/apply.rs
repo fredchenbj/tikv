@@ -1160,7 +1160,7 @@ impl ApplyDelegate {
                 self.metrics.lock_cf_written_bytes += value.len() as u64;
             }
             // TODO: check whether cf exists or not.
-            rocksdb::get_cf_handle(&ctx.engines.kv, cf)
+            rocksdb_util::get_cf_handle(&ctx.engines.kv, cf)
                 .and_then(|handle| ctx.wb().merge_cf(handle, &key, value)) // to modify
                 .unwrap_or_else(|e| {
                     panic!(

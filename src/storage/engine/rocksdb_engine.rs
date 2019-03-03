@@ -221,7 +221,7 @@ fn write_modifies(db: &DB, modifies: Vec<Modify>) -> Result<()> {
                 wb.merge(k.as_encoded(), &v)
             } else {
                 trace!("RocksEngine: update_cf {}, {}, {}", cf, k, escape(&v));
-                let handle = rocksdb::get_cf_handle(db, cf)?;
+                let handle = rocksdb_util::get_cf_handle(db, cf)?;
                 wb.merge_cf(handle, k.as_encoded(), &v)
             },
             Modify::DeleteRange(cf, start_key, end_key) => {
