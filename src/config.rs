@@ -1396,10 +1396,10 @@ fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOpera
                 continue;
             }
 
-            if value_size != 0 {
+            //if value_size != 0 {
                 result.extend_from_slice(&existing_value[first..end]);
                 total_size += 8 + key_size + value_size;
-            }
+            //}
             begin = end;
         }
     }
