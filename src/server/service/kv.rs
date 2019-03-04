@@ -1154,6 +1154,22 @@ fn handle_batch_commands_request<E: Engine>(
                 .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_batch_put.inc());
             response_batch_commands_request(executor, id, resp, tx, timer, thread_load);
         }
+        Some(BatchCommandsRequest_Request_oneof_cmd::RawUpdate(req)) => {
+            let timer = GRPC_MSG_HISTOGRAM_VEC.raw_update.start_coarse_timer();
+            let resp = future_raw_update(&storage, req)
+                .map(oneof!(BatchCommandsResponse_Response_oneof_cmd::RawUpdate))
+                .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_update.inc());
+            response_batch_commands_request(executor, id, resp, tx, timer, thread_load);
+        }
+        Some(BatchCommandsRequest_Request_oneof_cmd::RawBatchUpdate(req)) => {
+            let timer = GRPC_MSG_HISTOGRAM_VEC.raw_batch_update.start_coarse_timer();
+            let resp = future_raw_batch_update(&storage, req)
+                .map(oneof!(
+                    BatchCommandsResponse_Response_oneof_cmd::RawBatchUpdate
+                ))
+                .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_batch_update.inc());
+            response_batch_commands_request(executor, id, resp, tx, timer, thread_load);
+        }
         Some(BatchCommandsRequest_Request_oneof_cmd::RawDelete(req)) => {
             let timer = GRPC_MSG_HISTOGRAM_VEC.raw_delete.start_coarse_timer();
             let resp = future_raw_delete(&storage, req)
@@ -1574,6 +1590,55 @@ fn future_raw_batch_put<E: Engine>(
 
     AndThenWith::new(res, f.map_err(Error::from)).map(|v| {
         let mut resp = RawBatchPutResponse::new();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
+        }
+        resp
+    })
+}
+
+fn future_raw_update<E: Engine>(
+    storage: &Storage<E>,
+    mut req: RawUpdateRequest,
+) -> impl Future<Item = RawUpdateResponse, Error = Error> {
+    let (cb, future) = paired_future_callback();
+    let res = storage.async_raw_update(
+        req.take_context(),
+        req.take_cf(),
+        req.take_key(),
+        req.take_value(),
+        cb,
+    );
+
+    AndThenWith::new(res, future.map_err(Error::from)).map(|v| {
+        let mut resp = RawUpdateResponse::new();
+        if let Some(err) = extract_region_error(&v) {
+            resp.set_region_error(err);
+        } else if let Err(e) = v {
+            resp.set_error(format!("{}", e));
+        }
+        resp
+    })
+}
+
+fn future_raw_batch_update<E: Engine>(
+    storage: &Storage<E>,
+    mut req: RawBatchUpdateRequest,
+) -> impl Future<Item = RawBatchUpdateResponse, Error = Error> {
+    let cf = req.take_cf();
+    let pairs = req
+        .take_pairs()
+        .into_iter()
+        .map(|mut x| (x.take_key(), x.take_value()))
+        .collect();
+
+    let (cb, f) = paired_future_callback();
+    let res = storage.async_raw_batch_update(req.take_context(), cf, pairs, cb);
+
+    AndThenWith::new(res, f.map_err(Error::from)).map(|v| {
+        let mut resp = RawBatchUpdateResponse::new();
         if let Some(err) = extract_region_error(&v) {
             resp.set_region_error(err);
         } else if let Err(e) = v {
