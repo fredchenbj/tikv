@@ -238,7 +238,7 @@
 # store-pool-size = 2
 
 ## Disable KV DB WAL
-# disable_kv_wal = false
+# disable-kv-wal = false
 
 [coprocessor]
 ## When it is set to `true`, TiKV will try to split a Region with table prefix if that Region
