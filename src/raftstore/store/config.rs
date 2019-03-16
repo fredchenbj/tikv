@@ -119,6 +119,8 @@ pub struct Config {
 
     pub use_delete_range: bool,
 
+    pub disable_kv_wal: bool,
+
     pub cleanup_import_sst_interval: ReadableDuration,
 
     /// Maximum size of every local read task batch.
@@ -195,6 +197,7 @@ impl Default for Config {
             merge_max_log_gap: 10,
             merge_check_tick_interval: ReadableDuration::secs(10),
             use_delete_range: false,
+            disable_kv_wal: false,
             cleanup_import_sst_interval: ReadableDuration::minutes(10),
             local_read_batch_size: 1024,
             apply_max_batch_size: 1024,
@@ -511,6 +514,9 @@ impl Config {
         metrics
             .with_label_values(&["use_delete_range"])
             .set((self.use_delete_range as i32).into());
+        metrics
+            .with_label_values(&["disable_kv_wal"])
+            .set((self.disable_kv_wal as i32).into());
         metrics
             .with_label_values(&["cleanup_import_sst_interval"])
             .set(self.cleanup_import_sst_interval.as_secs() as f64);
