@@ -305,6 +305,8 @@ struct ApplyContext {
     sync_log_hint: bool,
     // Whether to use the delete range API instead of deleting one by one.
     use_delete_range: bool,
+    // Whether disable the WAL of kv rocksdb
+    disable_kv_wal: bool,
 }
 
 impl ApplyContext {
@@ -336,6 +338,7 @@ impl ApplyContext {
             sync_log_hint: false,
             exec_ctx: None,
             use_delete_range: cfg.use_delete_range,
+            disable_kv_wal: cfg.disable_kv_wal,
         }
     }
 
@@ -383,6 +386,9 @@ impl ApplyContext {
             let wb = self.wb.take().unwrap();
             let mut write_opts = WriteOptions::new();
             write_opts.set_sync(self.enable_sync_log && self.sync_log_hint);
+            if self.disable_kv_wal {
+                write_opts.disable_wal(true);
+            }
             self.engines
                 .kv
                 .write_opt(wb, &write_opts)

@@ -237,6 +237,9 @@
 ## Use how many threads to handle raft messages
 # store-pool-size = 2
 
+## Disable KV DB WAL
+# disable_kv_wal = false
+
 [coprocessor]
 ## When it is set to `true`, TiKV will try to split a Region with table prefix if that Region
 ## crosses tables.
