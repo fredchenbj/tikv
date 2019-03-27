@@ -428,9 +428,9 @@ impl<E: Engine> Endpoint<E> {
                     .forward(tx)
             })
             .map_err(|_| Error::Full)
-            .and_then(move |cpu_future| {
+            .and_then(move |_cpu_future| {
                 // Keep running stream producer
-                cpu_future.forget();
+                // cpu_future.forget();
 
                 // Returns the stream instead of a future
                 Ok(rx.then(|r| r.unwrap()))

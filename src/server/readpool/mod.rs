@@ -19,7 +19,8 @@ use std::fmt;
 use std::time::Duration;
 
 use futures::Future;
-use futures_cpupool::CpuFuture;
+// use futures_cpupool::CpuFuture;
+use tokio_threadpool::SpawnHandle;
 
 use crate::util;
 use crate::util::futurepool::{self, FuturePool};
@@ -117,7 +118,7 @@ impl<T: futurepool::Context + 'static> ReadPool<T> {
         &self,
         priority: Priority,
         future_factory: R,
-    ) -> Result<CpuFuture<F::Item, F::Error>, Full>
+    ) -> Result<SpawnHandle<F::Item, F::Error>, Full>
     where
         R: FnOnce(futurepool::ContextDelegators<T>) -> F + Send + 'static,
         F: Future + Send + 'static,
@@ -228,7 +229,7 @@ mod tests {
         pool: &ReadPool<Context>,
         id: u64,
         future_duration_ms: u64,
-    ) -> Result<CpuFuture<u64, ()>, Full> {
+    ) -> Result<SpawnHandle<u64, ()>, Full> {
         pool.future_execute(Priority::High, move |_| {
             thread::sleep(Duration::from_millis(future_duration_ms));
             future::ok::<u64, ()>(id)

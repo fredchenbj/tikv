@@ -21,9 +21,10 @@ use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
-use futures::Future;
-use futures_cpupool::{self as cpupool, CpuFuture, CpuPool};
+use futures::{lazy, Future};
+// use futures_cpupool::{self as cpupool, CpuFuture, CpuPool};
 use prometheus::{IntCounter, IntCounterVec, IntGauge, IntGaugeVec};
+use tokio_threadpool::{Builder, SpawnHandle, ThreadPool};
 
 use crate::util;
 use crate::util::collections::HashMap;
@@ -130,7 +131,7 @@ impl<T: Context> ContextDelegators<T> {
 
 /// A future thread pool that supports `on_tick` for each thread.
 pub struct FuturePool<T: Context + 'static> {
-    pool: CpuPool,
+    pool: Arc<ThreadPool>,
     context_delegators: ContextDelegators<T>,
     running_task_count: Arc<AtomicUsize>,
     metrics_pending_task_count: IntGauge,
@@ -149,7 +150,7 @@ impl<T: Context + 'static> fmt::Debug for FuturePool<T> {
 impl<T: Context + 'static> Clone for FuturePool<T> {
     fn clone(&self) -> FuturePool<T> {
         FuturePool {
-            pool: self.pool.clone(),
+            pool: Arc::clone(&self.pool),
             context_delegators: self.context_delegators.clone(),
             running_task_count: Arc::clone(&self.running_task_count),
             metrics_pending_task_count: self.metrics_pending_task_count.clone(),
@@ -173,7 +174,7 @@ impl<T: Context + 'static> FuturePool<T> {
         F: Fn() -> T,
     {
         let (tx, rx) = mpsc::sync_channel(pool_size);
-        let pool = cpupool::Builder::new()
+        let pool = Builder::new()
             .pool_size(pool_size)
             .stack_size(stack_size)
             .name_prefix(name_prefix)
@@ -183,7 +184,7 @@ impl<T: Context + 'static> FuturePool<T> {
                 let thread_id = thread::current().id();
                 tx.send(thread_id).unwrap();
             })
-            .create();
+            .build();
         let contexts = (0..pool_size)
             .map(|_| {
                 let thread_id = rx.recv().unwrap();
@@ -192,7 +193,7 @@ impl<T: Context + 'static> FuturePool<T> {
             })
             .collect();
         FuturePool {
-            pool,
+            pool: Arc::new(pool),
             context_delegators: ContextDelegators::new(contexts),
             running_task_count: Arc::new(AtomicUsize::new(0)),
             metrics_pending_task_count: FUTUREPOOL_PENDING_TASK_VEC
@@ -208,7 +209,7 @@ impl<T: Context + 'static> FuturePool<T> {
         self.running_task_count.load(Ordering::Acquire)
     }
 
-    pub fn spawn<F, R>(&self, future_factory: R) -> CpuFuture<F::Item, F::Error>
+    pub fn spawn<F, R>(&self, future_factory: R) -> SpawnHandle<F::Item, F::Error>
     where
         R: FnOnce(ContextDelegators<T>) -> F + Send + 'static,
         F: Future + Send + 'static,
@@ -232,7 +233,7 @@ impl<T: Context + 'static> FuturePool<T> {
 
         self.running_task_count.fetch_add(1, Ordering::Release);
         self.metrics_pending_task_count.inc();
-        self.pool.spawn_fn(func)
+        self.pool.spawn_handle(lazy(func))
     }
 }
 
@@ -248,7 +249,7 @@ mod tests {
     fn spawn_long_time_future<T: Context>(
         pool: &FuturePool<T>,
         future_duration_ms: u64,
-    ) -> CpuFuture<(), ()> {
+    ) -> SpawnHandle<(), ()> {
         pool.spawn(move |_| {
             thread::sleep(Duration::from_millis(future_duration_ms));
             future::ok::<(), ()>(())
