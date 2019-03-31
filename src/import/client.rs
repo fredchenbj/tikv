@@ -15,7 +15,6 @@ use kvproto::kvrpcpb::*;
 use kvproto::tikvpb_grpc::*;
 
 use crate::pd::{Config as PdConfig, PdClient, RegionInfo, RpcClient};
-use crate::storage::types::Key;
 use tikv_util::collections::{HashMap, HashMapEntry};
 use tikv_util::security::SecurityManager;
 
@@ -177,7 +176,9 @@ impl ImportClient for Client {
 
         let mut req = SplitRegionRequest::new();
         req.set_context(ctx);
-        req.set_split_key(Key::from_encoded_slice(split_key).into_raw()?);
+        //println!("split-key: {:?}", split_key);
+        req.set_split_key(split_key.to_vec());
+        //req.set_split_key(Key::from_encoded_slice(split_key).into_raw()?);
 
         let ch = self.resolve(store_id)?;
         let client = TikvClient::new(ch);
