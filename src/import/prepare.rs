@@ -156,18 +156,18 @@ impl<Client: ImportClient> PrepareJob<Client> {
 
 /// PrepareRangeJob is responsible for helping to split and scatter regions.
 /// according to range of data we are going to import
-struct PrepareRangeJob<Client> {
+pub struct PrepareRangeJob<Client> {
     tag: String,
     range: RangeInfo,
     client: Arc<Client>,
 }
 
 impl<Client: ImportClient> PrepareRangeJob<Client> {
-    fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
+    pub fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
         PrepareRangeJob { tag, range, client }
     }
 
-    fn run(&self, wait_scatter_regions: &mut Vec<u64>) -> Result<bool> {
+    pub fn run(&self, wait_scatter_regions: &mut Vec<u64>) -> Result<bool> {
         let start = Instant::now();
         info!("start"; "tag" => %self.tag, "range" => ?self.range);
 
@@ -207,6 +207,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
         if !self.need_split(&region) {
             return Ok(false);
         }
+        //println!("need split");
         match self.split_region(&region) {
             Ok(new_region) => {
                 // We need to wait for a few milliseconds, because PD may have
@@ -214,6 +215,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                 // that PD cannot create scatter operator for the new split
                 // region because it doesn't have the meta data of the new split
                 // region.
+
                 exec_with_retry!(
                     "split",
                     self.client.has_region_id(new_region.region.id)?,
@@ -221,6 +223,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                     SPLIT_WAIT_INTERVAL_MILLIS,
                     SPLIT_MAX_WAIT_INTERVAL_MILLIS
                 );
+
                 self.scatter_region(&new_region)?;
                 wait_scatter_regions.push(new_region.region.id);
 
@@ -257,6 +260,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
 
     /// Judges if we need to split the region.
     fn need_split(&self, region: &Region) -> bool {
+        //println!("split: region {:?}, range {:?}", region, self.range);
         let split_key = self.range.get_end();
         if split_key.is_empty() {
             return false;

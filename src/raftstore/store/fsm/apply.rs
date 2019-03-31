@@ -1209,7 +1209,11 @@ impl ApplyDelegate {
             }
             // TODO: check whether cf exists or not.
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| ctx.kv_wb().merge_cf(handle, &key, value).map_err(Into::into)) // to modify
+                .and_then(|handle| {
+                    ctx.kv_wb()
+                        .merge_cf(handle, &key, value)
+                        .map_err(Into::into)
+                }) // to modify
                 .unwrap_or_else(|e| {
                     panic!(
                         "{} failed to write ({}, {}) to cf {}: {:?}",
