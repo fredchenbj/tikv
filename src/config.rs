@@ -5,7 +5,7 @@ use std::error::Error;
 use std::fs;
 use std::i32;
 use std::io::Error as IoError;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::mem;
 use std::path::Path;
 use std::usize;

@@ -119,18 +119,18 @@ impl<Client: ImportClient> PrepareJob<Client> {
 
 /// PrepareRangeJob is responsible for helping to split and scatter regions.
 /// according to range of data we are going to import
-struct PrepareRangeJob<Client> {
+pub struct PrepareRangeJob<Client> {
     tag: String,
     range: RangeInfo,
     client: Arc<Client>,
 }
 
 impl<Client: ImportClient> PrepareRangeJob<Client> {
-    fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
+    pub fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
         PrepareRangeJob { tag, range, client }
     }
 
-    fn run(&self) -> Result<bool> {
+    pub fn run(&self) -> Result<bool> {
         let start = Instant::now();
         info!("start"; "tag" => %self.tag, "range" => ?self.range);
 
@@ -170,6 +170,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
         if !self.need_split(&region) {
             return Ok(false);
         }
+        //println!("need split");
         match self.split_region(&region) {
             Ok(new_region) => {
                 // We need to wait for a few milliseconds, because PD may have
@@ -189,6 +190,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                         thread::sleep(Duration::from_millis(SCATTER_WAIT_INTERVAL_MILLIS));
                     }
                 }
+
                 self.scatter_region(&new_region)?;
                 Ok(true)
             }
@@ -223,6 +225,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
 
     /// Judges if we need to split the region.
     fn need_split(&self, region: &Region) -> bool {
+        //println!("split: region {:?}, range {:?}", region, self.range);
         let split_key = self.range.get_end();
         if split_key.is_empty() {
             return false;
