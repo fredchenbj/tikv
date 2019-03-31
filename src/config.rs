@@ -11,16 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::i32;
 use std::io::Error as IoError;
 use std::io::{Read, Write};
+use std::mem;
 use std::path::Path;
 use std::usize;
-use std::mem;
-use std::collections::HashMap;
 
 use rocksdb::{
     BlockBasedOptions, ColumnFamilyOptions, CompactionPriority, DBCompactionStyle,
@@ -1427,12 +1427,12 @@ Note: little endian Coding
 */
 fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOperands) -> Vec<u8> {
     let mut result: Vec<u8> = Vec::with_capacity(operands.size_hint().0);
-    let arr : [u8;4] = [0, 0, 0, 0];
+    let arr: [u8; 4] = [0, 0, 0, 0];
     result.extend_from_slice(&arr[..]);
 
     let mut map_index = HashMap::new();
 
-    let mut total_size : u32 = 0;
+    let mut total_size: u32 = 0;
     total_size += 4;
 
     let mut v = Vec::new();
@@ -1442,34 +1442,32 @@ fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOpera
     let len = v.len();
 
     for i in 0..len {
-        let op_value : &[u8] = v.get( len-1-i ).unwrap();
+        let op_value: &[u8] = v.get(len - 1 - i).unwrap();
         let mut begin = 0;
-        begin += 4 ;
+        begin += 4;
 
         let op_len = op_value.len();
         while begin < op_len {
-
             //decode key size
             let first = begin;
-            let end = begin + 4 ;
+            let end = begin + 4;
             let vv = &op_value[begin..end];
-            let ptr: *const u8  = vv.as_ptr();
+            let ptr: *const u8 = vv.as_ptr();
             let ptr: *const u32 = ptr as *const u32;
-            let key_size = unsafe{ *ptr };
+            let key_size = unsafe { *ptr };
 
             //decode key
             begin = end;
             let end = begin + key_size as usize;
-            let key = &op_value[begin..end];  
-
+            let key = &op_value[begin..end];
 
             //decode value size
             begin = end;
             let end = begin + 4;
             let vv = &op_value[begin..end];
-            let ptr: *const u8  = vv.as_ptr();
+            let ptr: *const u8 = vv.as_ptr();
             let ptr: *const u32 = ptr as *const u32;
-            let value_size = unsafe{ *ptr };
+            let value_size = unsafe { *ptr };
 
             //decode value
             begin = end;
@@ -1483,7 +1481,6 @@ fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOpera
                     result.extend_from_slice(&op_value[first..end]);
                     total_size += 8 + key_size + value_size;
                 }
-
             }
             begin = end;
         }
@@ -1493,30 +1490,29 @@ fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOpera
         let mut begin = 0;
         let exist_total_size = existing_value.len();
 
-        begin += 4 ;
+        begin += 4;
 
         while begin < exist_total_size {
             //decode key size
             let first = begin;
             let end = begin + 4;
             let vv = &existing_value[begin..end];
-            let ptr: *const u8  = vv.as_ptr();
+            let ptr: *const u8 = vv.as_ptr();
             let ptr: *const u32 = ptr as *const u32;
-            let key_size = unsafe{ *ptr };
+            let key_size = unsafe { *ptr };
 
             //decode key
             begin = end;
             let end = begin + key_size as usize;
             let key = &existing_value[begin..end];
 
-
             //decode value size
             begin = end;
             let end = begin + 4;
             let vv = &existing_value[begin..end];
-            let ptr: *const u8  = vv.as_ptr();
+            let ptr: *const u8 = vv.as_ptr();
             let ptr: *const u32 = ptr as *const u32;
-            let value_size = unsafe{ *ptr };
+            let value_size = unsafe { *ptr };
 
             //decode value
             begin = end;
@@ -1529,8 +1525,8 @@ fn update_merge(_: &[u8], existing_val: Option<&[u8]>, operands: &mut MergeOpera
             }
 
             //if value_size != 0 {
-                result.extend_from_slice(&existing_value[first..end]);
-                total_size += 8 + key_size + value_size;
+            result.extend_from_slice(&existing_value[first..end]);
+            total_size += 8 + key_size + value_size;
             //}
             begin = end;
         }

@@ -455,7 +455,12 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
         ctx.spawn(future);
     }
 
-    fn raw_update(&mut self, ctx: RpcContext, mut req: RawUpdateRequest, sink: UnarySink<RawUpdateResponse>) {
+    fn raw_update(
+        &mut self,
+        ctx: RpcContext,
+        mut req: RawUpdateRequest,
+        sink: UnarySink<RawUpdateResponse>,
+    ) {
         let timer = GRPC_MSG_HISTOGRAM_VEC.raw_update.start_coarse_timer();
 
         let (cb, future) = paired_future_callback();
@@ -474,7 +479,7 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
 
         let future = future
             .map_err(Error::from)
-            .map(|v|{
+            .map(|v| {
                 let mut resp = RawUpdateResponse::new();
                 if let Some(err) = extract_region_error(&v) {
                     resp.set_region_error(err);

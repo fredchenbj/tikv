@@ -1206,7 +1206,8 @@ impl ApplyDelegate {
                     )
                 });
         } else {
-            ctx.wb().merge(&key, value).unwrap_or_else(|e| { // to modify
+            ctx.wb().merge(&key, value).unwrap_or_else(|e| {
+                // to modify
                 panic!(
                     "{} failed to write ({}, {}): {:?}",
                     self.tag,
@@ -1218,7 +1219,6 @@ impl ApplyDelegate {
         }
         Ok(resp)
     }
-
 
     fn handle_delete(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
         let key = req.get_delete().get_key();

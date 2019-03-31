@@ -1261,14 +1261,14 @@ impl<E: Engine> Storage<E> {
         Ok(())
     }
 
-        pub fn async_raw_update(
+    pub fn async_raw_update(
         &self,
         ctx: Context,
         cf: String,
         key: Vec<u8>,
         value: Vec<u8>,
         callback: Callback<()>,
-    ) -> Result<()>{
+    ) -> Result<()> {
         if key.len() > self.max_key_size {
             callback(Err(Error::KeyTooLarge(key.len(), self.max_key_size)));
             return Ok(());
@@ -1280,10 +1280,12 @@ impl<E: Engine> Storage<E> {
                 Key::from_encoded(key),
                 value,
             )],
-            box |(_, res): (_, engine::Result<_>)| callback(res.map_err(Error::from)),
+            Box::new(|(_, res): (_, engine::Result<_>)| callback(res.map_err(Error::from))),
         )?;
 
-        KV_COMMAND_COUNTER_VEC.with_label_values(&["raw_update"]).inc();
+        KV_COMMAND_COUNTER_VEC
+            .with_label_values(&["raw_update"])
+            .inc();
         Ok(())
     }
 
@@ -1293,7 +1295,7 @@ impl<E: Engine> Storage<E> {
         cf: String,
         pairs: Vec<KvPair>,
         callback: Callback<()>,
-    ) -> Result<()>{
+    ) -> Result<()> {
         let cf = Self::rawkv_cf(&cf)?;
         for &(ref key, _) in &pairs {
             if key.len() > self.max_key_size {
@@ -1305,10 +1307,11 @@ impl<E: Engine> Storage<E> {
             .into_iter()
             .map(|(k, v)| Modify::Update(cf, Key::from_encoded(k), v))
             .collect();
-        self.engine
-            .async_write(&ctx, requests, box |(_, res): (_, engine::Result<_>)| {
-                callback(res.map_err(Error::from))
-            })?;
+        self.engine.async_write(
+            &ctx,
+            requests,
+            Box::new(|(_, res): (_, engine::Result<_>)| callback(res.map_err(Error::from))),
+        )?;
         KV_COMMAND_COUNTER_VEC
             .with_label_values(&["raw_batch_update"])
             .inc();
