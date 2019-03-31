@@ -80,6 +80,11 @@ ctl:
 	@mkdir -p ${BIN_PATH}
 	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${BIN_PATH}/
 
+presplit:
+	cargo build --no-default-features --features "${ENABLE_FEATURES}" --bin tikv-presplit
+	@mkdir -p ${BIN_PATH}
+	@cp -f ${CARGO_TARGET_DIR}/debug/tikv-presplit ${BIN_PATH}/
+
 run:
 	cargo run --no-default-features --features  "${ENABLE_FEATURES}" --bin tikv-server
 
@@ -110,7 +115,7 @@ fail_release:
 dist_release:
 	make build_release
 	@mkdir -p ${BIN_PATH}
-	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${CARGO_TARGET_DIR}/release/tikv-server ${CARGO_TARGET_DIR}/release/tikv-importer ${BIN_PATH}/
+	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${CARGO_TARGET_DIR}/release/tikv-server ${CARGO_TARGET_DIR}/release/tikv-importer ${CARGO_TARGET_DIR}/release/tikv-presplit ${BIN_PATH}/
 	bash scripts/check-sse4_2.sh
 
 # Distributable bins with SSE4.2 optimizations
