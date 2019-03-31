@@ -119,18 +119,18 @@ impl<Client: ImportClient> PrepareJob<Client> {
 
 /// PrepareRangeJob is responsible for helping to split and scatter regions.
 /// according to range of data we are going to import
-struct PrepareRangeJob<Client> {
+pub struct PrepareRangeJob<Client> {
     tag: String,
     range: RangeInfo,
     client: Arc<Client>,
 }
 
 impl<Client: ImportClient> PrepareRangeJob<Client> {
-    fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
+    pub fn new(tag: String, range: RangeInfo, client: Arc<Client>) -> PrepareRangeJob<Client> {
         PrepareRangeJob { tag, range, client }
     }
 
-    fn run(&self) -> Result<bool> {
+    pub fn run(&self) -> Result<bool> {
         let start = Instant::now();
         info!("start"; "tag" => %self.tag, "range" => ?self.range);
 
