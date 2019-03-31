@@ -36,6 +36,7 @@ RUN mkdir -p ./src/bin && \
     echo 'fn main() {}' > ./src/bin/tikv-ctl.rs && \
     echo 'fn main() {}' > ./src/bin/tikv-server.rs && \
     echo 'fn main() {}' > ./src/bin/tikv-importer.rs && \
+    echo 'fn main() {}' > ./src/bin/tikv-presplit.rs && \
     echo '' > ./src/lib.rs && \
     mkdir ./components/codec/src && echo '' > ./components/codec/src/lib.rs && \
     mkdir ./components/cop_codegen/src && echo '' > ./components/cop_codegen/src/lib.rs && \

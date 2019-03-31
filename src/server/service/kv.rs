@@ -933,7 +933,7 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
         let region_id = req.get_context().get_region_id();
         let (cb, future) = paired_future_callback();
         let mut split_keys = if !req.get_split_key().is_empty() {
-            vec![Key::from_raw(req.get_split_key()).into_encoded()]
+            vec![req.get_split_key().to_vec()]
         } else {
             req.take_split_keys()
                 .into_iter()
