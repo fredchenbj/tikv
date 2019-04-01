@@ -1,21 +1,37 @@
-use tikv::import::client::Client;
-use tikv::import::common;
-use tikv::import::prepare;
-use std::mem;
+use tikv::import::client::*;
+use tikv::import::common::RangeInfo;
+use tikv::import::prepare::PrepareRangeJob;
+//use std::mem;
+use std::sync::Arc;
+
+fn new_encoded_key(k: &[u8]) -> Vec<u8> {
+    if k.is_empty() {
+        vec![]
+    } else {
+        k.iter().cloned().collect()
+    }
+}
 
 fn main() {
     let pd_addr = "10.136.16.1:2379";
     let client = Client::new(pd_addr, 1);
 
-    println!("{}", mem::size_of_val(&client));
+    let client = match client {
+        Ok(item) => item,
+        Err(e) => panic!(e),
+    };
+    //println!("{}", mem::size_of_val(&client));
 
-    let mut start = Vec::new();
-    let mut k = Vec::new();
+    let start = Vec::new();
+    let k = new_encoded_key(b"test:5");
 
-    let range = common::RangeInfo::new(&start, &k, 0);
+    let range = RangeInfo::new(&start, &k, 0);
 
     let tag = format!("[PrepareRangeJob {}:{}]",  0, 0);
-    let job = prepare::PrepareRangeJob::new(tag, range, client);
-    job.run();
-    
+    let job = PrepareRangeJob::new(tag, range, Arc::new(client));
+    let res = job.run();
+    match res {
+        Ok(x) => println!("job runs {}", x),
+        Err(_) => println!("job error"),  // here 
+    };
 }

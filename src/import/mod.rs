@@ -44,3 +44,4 @@ pub use self::kv_server::ImportKVServer;
 pub use self::kv_service::ImportKVService;
 pub use self::sst_importer::SSTImporter;
 pub use self::sst_service::ImportSSTService;
+pub use self::client::ImportClient;
