@@ -177,7 +177,8 @@ impl ImportClient for Client {
 
         let mut req = SplitRegionRequest::new();
         req.set_context(ctx);
-        req.set_split_key(Key::from_encoded_slice(split_key).into_raw()?);
+        req.set_split_key(split_key.to_vec());
+        //req.set_split_key(Key::from_encoded_slice(split_key).into_raw()?);
 
         let ch = self.resolve(store_id)?;
         let client = TikvClient::new(ch);
