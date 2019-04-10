@@ -23,43 +23,43 @@ use prometheus::local::*;
 
 use crate::coprocessor::dag::executor::ExecutorMetrics;
 pub struct TlsCop {
-    pub LOCAL_COPR_REQ_HISTOGRAM_VEC: RefCell<LocalHistogramVec>,
-    pub LOCAL_OUTDATED_REQ_WAIT_TIME: RefCell<LocalHistogramVec>,
-    pub LOCAL_COPR_REQ_HANDLE_TIME: RefCell<LocalHistogramVec>,
-    pub LOCAL_COPR_REQ_WAIT_TIME: RefCell<LocalHistogramVec>,
-    pub LOCAL_COPR_REQ_ERROR: RefCell<LocalIntCounterVec>,
-    pub LOCAL_COPR_SCAN_KEYS: RefCell<LocalHistogramVec>,
-    pub LOCAL_COPR_SCAN_DETAILS: RefCell<LocalIntCounterVec>,
-    pub LOCAL_COPR_ROCKSDB_PERF_COUNTER: RefCell<LocalIntCounterVec>,
-    LOCAL_COPR_EXECUTOR_COUNT: RefCell<LocalIntCounterVec>,
-    LOCAL_COPR_GET_OR_SCAN_COUNT: RefCell<LocalIntCounterVec>,
-    LOCAL_COP_FLOW_STATS: RefCell<HashMap<u64, crate::storage::FlowStatistics>>,
+    pub local_copr_req_histogram_vec: RefCell<LocalHistogramVec>,
+    pub local_outdated_req_wait_time: RefCell<LocalHistogramVec>,
+    pub local_copr_req_handle_time: RefCell<LocalHistogramVec>,
+    pub local_copr_req_wait_time: RefCell<LocalHistogramVec>,
+    pub local_copr_req_error: RefCell<LocalIntCounterVec>,
+    pub local_copr_scan_keys: RefCell<LocalHistogramVec>,
+    pub local_copr_scan_details: RefCell<LocalIntCounterVec>,
+    pub local_copr_rocksdb_perf_counter: RefCell<LocalIntCounterVec>,
+    local_copr_executor_count: RefCell<LocalIntCounterVec>,
+    local_copr_get_or_scan_count: RefCell<LocalIntCounterVec>,
+    local_cop_flow_stats: RefCell<HashMap<u64, crate::storage::FlowStatistics>>,
 }
 
 
 thread_local! {
-    pub static tls_metrics: TlsCop = TlsCop {
-    LOCAL_COPR_REQ_HISTOGRAM_VEC:
+    pub static TLS_METRICS: TlsCop = TlsCop {
+    local_copr_req_histogram_vec:
         RefCell::new(COPR_REQ_HISTOGRAM_VEC.local()),
-    LOCAL_OUTDATED_REQ_WAIT_TIME:
+    local_outdated_req_wait_time:
         RefCell::new(OUTDATED_REQ_WAIT_TIME.local()),
-    LOCAL_COPR_REQ_HANDLE_TIME:
+    local_copr_req_handle_time:
         RefCell::new(COPR_REQ_HANDLE_TIME.local()),
-    LOCAL_COPR_REQ_WAIT_TIME:
+    local_copr_req_wait_time:
         RefCell::new(COPR_REQ_WAIT_TIME.local()),
-    LOCAL_COPR_REQ_ERROR:
+    local_copr_req_error:
         RefCell::new(COPR_REQ_ERROR.local()),
-    LOCAL_COPR_SCAN_KEYS:
+    local_copr_scan_keys:
         RefCell::new(COPR_SCAN_KEYS.local()),
-    LOCAL_COPR_SCAN_DETAILS:
+    local_copr_scan_details:
         RefCell::new(COPR_SCAN_DETAILS.local()),
-    LOCAL_COPR_ROCKSDB_PERF_COUNTER:
+    local_copr_rocksdb_perf_counter:
         RefCell::new(COPR_ROCKSDB_PERF_COUNTER.local()),
-    LOCAL_COPR_EXECUTOR_COUNT:
+    local_copr_executor_count:
         RefCell::new(COPR_EXECUTOR_COUNT.local()),
-    LOCAL_COPR_GET_OR_SCAN_COUNT:
+    local_copr_get_or_scan_count:
         RefCell::new(COPR_GET_OR_SCAN_COUNT.local()),
-    LOCAL_COP_FLOW_STATS:
+    local_cop_flow_stats:
         RefCell::new(HashMap::default()),
     }
 }
@@ -89,42 +89,32 @@ impl ReadPoolImpl {
 
     #[inline]
     fn tls_flush(pd_sender: &FutureScheduler<PdTask>) {
-        // Flush Prometheus metrics
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_REQ_HISTOGRAM_VEC.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_OUTDATED_REQ_WAIT_TIME.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_REQ_HANDLE_TIME.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_REQ_WAIT_TIME.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_REQ_ERROR.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_SCAN_KEYS.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_SCAN_DETAILS.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_GET_OR_SCAN_COUNT.borrow_mut().flush());
-        tls_metrics
-            .with(|m| m.LOCAL_COPR_EXECUTOR_COUNT.borrow_mut().flush());
+        TLS_METRICS
+            .with(|m|
+                      {
+                          // Flush Prometheus metrics
+                          m.local_copr_req_histogram_vec.borrow_mut().flush();
+                          m.local_copr_req_handle_time.borrow_mut().flush();
+                          m.local_copr_req_wait_time.borrow_mut().flush();
+                          m.local_copr_scan_keys.borrow_mut().flush();
+                          m.local_copr_rocksdb_perf_counter.borrow_mut().flush();
+                          m.local_copr_scan_details.borrow_mut().flush();
+                          m.local_copr_get_or_scan_count.borrow_mut().flush();
+                          m.local_copr_executor_count.borrow_mut().flush();
 
-        // Report PD metrics
-        tls_metrics
-            .with(|local_cop_flow_stats| {
-                if local_cop_flow_stats.LOCAL_COP_FLOW_STATS.borrow().is_empty() {
-                    // Stats to report to PD is empty, ignore.
-                    return;
-                }
+                          // Report PD metrics
+                          if m.local_cop_flow_stats.borrow().is_empty() {
+                              // Stats to report to PD is empty, ignore.
+                              return;
+                          }
 
-                let read_stats = local_cop_flow_stats.LOCAL_COP_FLOW_STATS.replace(HashMap::default());
-                let result = pd_sender.schedule(PdTask::ReadStats { read_stats });
-                if let Err(e) = result {
-                    error!("Failed to send cop pool read flow statistics"; "err" => ?e);
-                }
-            });
+                          let read_stats = m.local_cop_flow_stats.replace(HashMap::default());
+                          let result = pd_sender.schedule(PdTask::ReadStats { read_stats });
+                          if let Err(e) = result {
+                              error!("Failed to send cop pool read flow statistics"; "err" => ?e);
+                          }
+                      }
+                );
     }
 
     pub fn tls_collect_executor_metrics(region_id: u64, type_str: &str, metrics: ExecutorMetrics) {
@@ -132,8 +122,8 @@ impl ReadPoolImpl {
         // cf statistics group by type
         for (cf, details) in stats.details() {
             for (tag, count) in details {
-                tls_metrics.with(|m| {
-                    m.LOCAL_COPR_SCAN_DETAILS.borrow_mut()
+                TLS_METRICS.with(|m| {
+                    m.local_copr_scan_details.borrow_mut()
                         .with_label_values(&[type_str, cf, tag])
                         .inc_by(count as i64);
                 });
@@ -144,18 +134,19 @@ impl ReadPoolImpl {
 
         // scan count
         let scan_counter = metrics.scan_counter;
-        let executor_count = metrics.executor_count;
-        tls_metrics
-            .with(|m| scan_counter.consume(&mut m.LOCAL_COPR_GET_OR_SCAN_COUNT.borrow_mut()));
         // exec count
-        tls_metrics
-            .with(|m| executor_count.consume(&mut m.LOCAL_COPR_EXECUTOR_COUNT.borrow_mut()));
+        let executor_count = metrics.executor_count;
+        TLS_METRICS
+            .with(|m| {
+                scan_counter.consume(&mut m.local_copr_get_or_scan_count.borrow_mut());
+                executor_count.consume(&mut m.local_copr_executor_count.borrow_mut());
+            });
     }
 
     #[inline]
     pub fn tls_collect_read_flow(region_id: u64, statistics: &crate::storage::Statistics) {
-        tls_metrics.with(|m| {
-            let mut map = m.LOCAL_COP_FLOW_STATS.borrow_mut();
+        TLS_METRICS.with(|m| {
+            let mut map = m.local_cop_flow_stats.borrow_mut();
             let flow_stats = map
                 .entry(region_id)
                 .or_insert_with(crate::storage::FlowStatistics::default);

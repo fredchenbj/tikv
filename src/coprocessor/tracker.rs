@@ -178,52 +178,44 @@ impl Tracker {
             std::mem::replace(&mut self.total_exec_metrics, ExecutorMetrics::default());
 
         // req time
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_REQ_HISTOGRAM_VEC.borrow_mut()
+        TLS_METRICS.with(|m| {
+            m.local_copr_req_histogram_vec.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
-                .observe(time::duration_to_sec(self.req_time))
-        });
+                .observe(time::duration_to_sec(self.req_time));
+
         // wait time
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_REQ_WAIT_TIME.borrow_mut()
+            m.local_copr_req_wait_time.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
-                .observe(time::duration_to_sec(self.wait_time))
-        });
+                .observe(time::duration_to_sec(self.wait_time));
+
         // handle time
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_REQ_HANDLE_TIME.borrow_mut()
+            m.local_copr_req_handle_time.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
-                .observe(time::duration_to_sec(self.total_process_time))
-        });
+                .observe(time::duration_to_sec(self.total_process_time));
+
         // scan keys
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_SCAN_KEYS.borrow_mut()
+            m.local_copr_scan_keys.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
-                .observe(total_exec_metrics.cf_stats.total_op_count() as f64)
-        });
+                .observe(total_exec_metrics.cf_stats.total_op_count() as f64);
+
         // rocksdb perf stats
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
+            m.local_copr_rocksdb_perf_counter.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "internal_key_skipped_count"])
                 .inc_by(self.total_perf_statistics.internal_key_skipped_count as i64);
-        });
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
+
+            m.local_copr_rocksdb_perf_counter.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "internal_delete_skipped_count"])
                 .inc_by(self.total_perf_statistics.internal_delete_skipped_count as i64);
-        });
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
+
+            m.local_copr_rocksdb_perf_counter.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_cache_hit_count"])
                 .inc_by(self.total_perf_statistics.block_cache_hit_count as i64);
-        });
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
+
+            m.local_copr_rocksdb_perf_counter.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_read_count"])
                 .inc_by(self.total_perf_statistics.block_read_count as i64);
-        });
-        tls_metrics.with(|m| {
-            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
+
+            m.local_copr_rocksdb_perf_counter.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_read_byte"])
                 .inc_by(self.total_perf_statistics.block_read_byte as i64);
         });
