@@ -103,7 +103,7 @@ impl DAGBuilder {
         match first_ed.get_tp() {
             ExecType::TypeTableScan => {
                 // TODO: Use static metrics.
-                COPR_EXECUTOR_COUNT.with_label_values(&["tblscan"]).inc();
+                tls_metrics.COPR_EXECUTOR_COUNT.with_label_values(&["tblscan"]).inc();
 
                 let mut descriptor = first_ed.take_tbl_scan();
                 let columns_info = descriptor.take_columns().into_vec();
@@ -117,7 +117,7 @@ impl DAGBuilder {
                 )?);
             }
             ExecType::TypeIndexScan => {
-                COPR_EXECUTOR_COUNT.with_label_values(&["idxscan"]).inc();
+                tls_metrics.COPR_EXECUTOR_COUNT.with_label_values(&["idxscan"]).inc();
 
                 let mut descriptor = first_ed.take_idx_scan();
                 let columns_info = descriptor.take_columns().into_vec();

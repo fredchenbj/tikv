@@ -25,26 +25,26 @@ use crate::coprocessor::dag::executor::ExecutorMetrics;
 
 thread_local! {
     pub static LOCAL_COPR_REQ_HISTOGRAM_VEC: RefCell<LocalHistogramVec> =
-        RefCell::new(COPR_REQ_HISTOGRAM_VEC.local());
+        RefCell::new(tls_metrics.COPR_REQ_HISTOGRAM_VEC.local());
     pub static LOCAL_OUTDATED_REQ_WAIT_TIME: RefCell<LocalHistogramVec> =
-        RefCell::new(OUTDATED_REQ_WAIT_TIME.local());
+        RefCell::new(tls_metrics.OUTDATED_REQ_WAIT_TIME.local());
     pub static LOCAL_COPR_REQ_HANDLE_TIME: RefCell<LocalHistogramVec> =
-        RefCell::new(COPR_REQ_HANDLE_TIME.local());
+        RefCell::new(tls_metrics.COPR_REQ_HANDLE_TIME.local());
     pub static LOCAL_COPR_REQ_WAIT_TIME: RefCell<LocalHistogramVec> =
-        RefCell::new(COPR_REQ_WAIT_TIME.local());
+        RefCell::new(tls_metrics.COPR_REQ_WAIT_TIME.local());
 
     pub static LOCAL_COPR_REQ_ERROR: RefCell<LocalIntCounterVec> =
-        RefCell::new(COPR_REQ_ERROR.local());
+        RefCell::new(tls_metrics.COPR_REQ_ERROR.local());
     pub static LOCAL_COPR_SCAN_KEYS: RefCell<LocalHistogramVec> =
-        RefCell::new(COPR_SCAN_KEYS.local());
+        RefCell::new(tls_metrics.COPR_SCAN_KEYS.local());
     pub static LOCAL_COPR_SCAN_DETAILS: RefCell<LocalIntCounterVec> =
-        RefCell::new(COPR_SCAN_DETAILS.local());
+        RefCell::new(tls_metrics.COPR_SCAN_DETAILS.local());
     pub static LOCAL_COPR_ROCKSDB_PERF_COUNTER: RefCell<LocalIntCounterVec> =
-        RefCell::new(COPR_ROCKSDB_PERF_COUNTER.local());
+        RefCell::new(tls_metrics.COPR_ROCKSDB_PERF_COUNTER.local());
     static LOCAL_COPR_EXECUTOR_COUNT: RefCell<LocalIntCounterVec> =
-        RefCell::new(COPR_EXECUTOR_COUNT.local());
+        RefCell::new(tls_metrics.COPR_EXECUTOR_COUNT.local());
     static LOCAL_COPR_GET_OR_SCAN_COUNT: RefCell<LocalIntCounterVec> =
-        RefCell::new(COPR_GET_OR_SCAN_COUNT.local());
+        RefCell::new(tls_metrics.COPR_GET_OR_SCAN_COUNT.local());
 
     static LOCAL_COP_FLOW_STATS: RefCell<HashMap<u64, crate::storage::FlowStatistics>> =
         RefCell::new(HashMap::default());

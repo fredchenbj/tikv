@@ -70,9 +70,9 @@ impl ExecLocalMetrics {
     pub fn new(sender: FutureScheduler<PdTask>) -> ExecLocalMetrics {
         ExecLocalMetrics {
             flow_stats: CopFlowStatistics::new(sender),
-            scan_details: COPR_SCAN_DETAILS.local(),
-            scan_counter: COPR_GET_OR_SCAN_COUNT.local(),
-            exec_counter: COPR_EXECUTOR_COUNT.local(),
+            scan_details: tls_metrics.COPR_SCAN_DETAILS.local(),
+            scan_counter: tls_metrics.COPR_GET_OR_SCAN_COUNT.local(),
+            exec_counter: tls_metrics.COPR_EXECUTOR_COUNT.local(),
         }
     }
 
@@ -116,13 +116,13 @@ pub struct BasicLocalMetrics {
 impl Default for BasicLocalMetrics {
     fn default() -> BasicLocalMetrics {
         BasicLocalMetrics {
-            req_time: COPR_REQ_HISTOGRAM_VEC.local(),
-            outdate_time: OUTDATED_REQ_WAIT_TIME.local(),
-            handle_time: COPR_REQ_HANDLE_TIME.local(),
-            wait_time: COPR_REQ_WAIT_TIME.local(),
-            error_cnt: COPR_REQ_ERROR.local(),
-            scan_keys: COPR_SCAN_KEYS.local(),
-            rocksdb_perf_stats: COPR_ROCKSDB_PERF_COUNTER.local(),
+            req_time: tls_metrics.COPR_REQ_HISTOGRAM_VEC.local(),
+            outdate_time: tls_metrics.OUTDATED_REQ_WAIT_TIME.local(),
+            handle_time: tls_metrics.COPR_REQ_HANDLE_TIME.local(),
+            wait_time: tls_metrics.COPR_REQ_WAIT_TIME.local(),
+            error_cnt: tls_metrics.COPR_REQ_ERROR.local(),
+            scan_keys: tls_metrics.COPR_SCAN_KEYS.local(),
+            rocksdb_perf_stats: tls_metrics.COPR_ROCKSDB_PERF_COUNTER.local(),
         }
     }
 }
