@@ -178,52 +178,52 @@ impl Tracker {
             std::mem::replace(&mut self.total_exec_metrics, ExecutorMetrics::default());
 
         // req time
-        LOCAL_COPR_REQ_HISTOGRAM_VEC.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_REQ_HISTOGRAM_VEC.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
                 .observe(time::duration_to_sec(self.req_time))
         });
         // wait time
-        LOCAL_COPR_REQ_WAIT_TIME.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_REQ_WAIT_TIME.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
                 .observe(time::duration_to_sec(self.wait_time))
         });
         // handle time
-        LOCAL_COPR_REQ_HANDLE_TIME.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_REQ_HANDLE_TIME.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
                 .observe(time::duration_to_sec(self.total_process_time))
         });
         // scan keys
-        LOCAL_COPR_SCAN_KEYS.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_SCAN_KEYS.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag])
                 .observe(total_exec_metrics.cf_stats.total_op_count() as f64)
         });
         // rocksdb perf stats
-        LOCAL_COPR_ROCKSDB_PERF_COUNTER.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "internal_key_skipped_count"])
                 .inc_by(self.total_perf_statistics.internal_key_skipped_count as i64);
         });
-        LOCAL_COPR_ROCKSDB_PERF_COUNTER.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "internal_delete_skipped_count"])
                 .inc_by(self.total_perf_statistics.internal_delete_skipped_count as i64);
         });
-        LOCAL_COPR_ROCKSDB_PERF_COUNTER.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_cache_hit_count"])
                 .inc_by(self.total_perf_statistics.block_cache_hit_count as i64);
         });
-        LOCAL_COPR_ROCKSDB_PERF_COUNTER.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_read_count"])
                 .inc_by(self.total_perf_statistics.block_read_count as i64);
         });
-        LOCAL_COPR_ROCKSDB_PERF_COUNTER.with(|m| {
-            m.borrow_mut()
+        tls_metrics.with(|m| {
+            m.LOCAL_COPR_ROCKSDB_PERF_COUNTER.borrow_mut()
                 .with_label_values(&[self.req_ctx.tag, "block_read_byte"])
                 .inc_by(self.total_perf_statistics.block_read_byte as i64);
         });
