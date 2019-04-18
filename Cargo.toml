@@ -29,6 +29,9 @@ name = "tikv-ctl"
 [[bin]]
 name = "tikv-importer"
 
+[[bin]]
+name = "tikv-bulkload"
+
 [[test]]
 name = "failpoints"
 path = "tests/failpoints/mod.rs"

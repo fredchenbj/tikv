@@ -189,7 +189,9 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                         thread::sleep(Duration::from_millis(SCATTER_WAIT_INTERVAL_MILLIS));
                     }
                 }
-                self.scatter_region(&new_region)?;
+                if region.get_start_key() == self.range.get_start() {
+                    self.scatter_region(&new_region)?;
+                }
                 Ok(true)
             }
             Err(Error::NotLeader(new_leader)) => {

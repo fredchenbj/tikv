@@ -37,6 +37,7 @@ mod sst_service;
 
 pub mod test_helpers;
 
+pub use self::client::ImportClient;
 pub use self::config::Config;
 pub use self::errors::{Error, Result};
 pub use self::kv_importer::KVImporter;
@@ -44,4 +45,3 @@ pub use self::kv_server::ImportKVServer;
 pub use self::kv_service::ImportKVService;
 pub use self::sst_importer::SSTImporter;
 pub use self::sst_service::ImportSSTService;
-pub use self::client::ImportClient;
