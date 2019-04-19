@@ -139,7 +139,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                 thread::sleep(Duration::from_secs(RETRY_INTERVAL_SECS));
             }
 
-            let mut region = match self.client.get_region(self.range.get_end()) {
+            let mut region = match self.client.get_region(self.range.get_start()) {
                 Ok(region) => region,
                 Err(e) => {
                     warn!("get_region failed"; "tag" => %self.tag, "err" => %e);
@@ -190,11 +190,8 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                         thread::sleep(Duration::from_millis(SCATTER_WAIT_INTERVAL_MILLIS));
                     }
                 }
-                //println!("scatter: region {:?}, range {:?}", region, self.range);
-                if self.range.get_start() != b"" && region.get_start_key() == self.range.get_start() {
-                    //println!("scatter region");
-                    self.scatter_region(&new_region)?;
-                }
+
+                self.scatter_region(&new_region)?;
                 Ok(true)
             }
             Err(Error::NotLeader(new_leader)) => {

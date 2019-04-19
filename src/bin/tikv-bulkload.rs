@@ -96,19 +96,11 @@ fn main() {
         //println!("start_key: {:?}", start_key);
         //println!("end_key: {:?}", end_key);
 
-        let start = Vec::new();
-        let first_range = RangeInfo::new(&start, &start_key, 0);
-        let res = split_and_scatter_region(first_range, Arc::clone(&client));
+        let range = RangeInfo::new(&start_key, &end_key, 0);
+        let res = split_and_scatter_region(range, Arc::clone(&client));
         match res {
-            Ok(x) => println!("first job {} runs {}", i, x),
-            Err(_) => println!("first job {} error", i),
-        };
-
-        let second_range = RangeInfo::new(&start_key, &end_key, 0);
-        let res = split_and_scatter_region(second_range, Arc::clone(&client));
-        match res {
-            Ok(x) => println!("second job {} runs {}", i, x),
-            Err(_) => println!("second job {} error", i),
+            Ok(x) => println!("job {} runs {}", i, x),
+            Err(_) => println!("job {} error", i),
         };
     }
 }
