@@ -176,6 +176,7 @@ impl ImportClient for Client {
 
         let mut req = SplitRegionRequest::new();
         req.set_context(ctx);
+        //println!("split-key: {:?}", split_key);
         req.set_split_key(split_key.to_vec());
         //req.set_split_key(Key::from_encoded_slice(split_key).into_raw()?);
 

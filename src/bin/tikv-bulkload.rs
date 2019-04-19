@@ -65,7 +65,7 @@ fn main() {
         )
         .get_matches();
 
-    let mut pd_addr = "10.136.16.1:2379";
+    let mut pd_addr = "10.136.16.2:2379";
     if let Some(pd) = matches.value_of("pd") {
         pd_addr = pd;
     }
@@ -84,28 +84,31 @@ fn main() {
     }
 
     //let mut shard_key_bits: u8 = 2;
-    let shard_key_bits = matches.value_of("shard-bits").map_or(0, |s| s.parse().expect("parse u8"));
+    let shard_key_bits = matches.value_of("shard-bits").map_or(1, |s| s.parse().expect("parse u8"));
 
-    let max_count: u8 = (1 << shard_key_bits) - 1;
+    let max_count: u8 = 1 << shard_key_bits;
 
     for i in 0..max_count {
         let new_key_prefix = i << (8 - shard_key_bits - 1);
         let start_key = split_start_key(table_name.as_bytes(), new_key_prefix);
         let end_key = split_end_key(table_name.as_bytes(), new_key_prefix);
 
+        //println!("start_key: {:?}", start_key);
+        //println!("end_key: {:?}", end_key);
+
         let start = Vec::new();
         let first_range = RangeInfo::new(&start, &start_key, 0);
         let res = split_and_scatter_region(first_range, Arc::clone(&client));
         match res {
-            Ok(x) => println!("job runs {}", x),
-            Err(_) => println!("job {} error", i), // here
+            Ok(x) => println!("first job {} runs {}", i, x),
+            Err(_) => println!("first job {} error", i),
         };
 
         let second_range = RangeInfo::new(&start_key, &end_key, 0);
         let res = split_and_scatter_region(second_range, Arc::clone(&client));
         match res {
-            Ok(x) => println!("job runs {}", x),
-            Err(_) => println!("job {} error", i), // here
+            Ok(x) => println!("second job {} runs {}", i, x),
+            Err(_) => println!("second job {} error", i),
         };
     }
 }

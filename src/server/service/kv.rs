@@ -786,7 +786,7 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
         let (cb, future) = paired_future_callback();
         let req = CasualMessage::SplitRegion {
             region_epoch: req.take_context().take_region_epoch(),
-            split_keys: vec![Key::from_raw(req.get_split_key()).into_encoded()],
+            split_keys: vec![req.get_split_key().to_vec()],
             callback: Callback::Write(cb),
         };
 

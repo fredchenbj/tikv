@@ -139,7 +139,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                 thread::sleep(Duration::from_secs(RETRY_INTERVAL_SECS));
             }
 
-            let mut region = match self.client.get_region(self.range.get_start()) {
+            let mut region = match self.client.get_region(self.range.get_end()) {
                 Ok(region) => region,
                 Err(e) => {
                     warn!("get_region failed"; "tag" => %self.tag, "err" => %e);
@@ -170,6 +170,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
         if !self.need_split(&region) {
             return Ok(false);
         }
+        //println!("need split");
         match self.split_region(&region) {
             Ok(new_region) => {
                 // We need to wait for a few milliseconds, because PD may have
@@ -189,7 +190,9 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
                         thread::sleep(Duration::from_millis(SCATTER_WAIT_INTERVAL_MILLIS));
                     }
                 }
-                if region.get_start_key() == self.range.get_start() {
+                //println!("scatter: region {:?}, range {:?}", region, self.range);
+                if self.range.get_start() != b"" && region.get_start_key() == self.range.get_start() {
+                    //println!("scatter region");
                     self.scatter_region(&new_region)?;
                 }
                 Ok(true)
@@ -225,6 +228,7 @@ impl<Client: ImportClient> PrepareRangeJob<Client> {
 
     /// Judges if we need to split the region.
     fn need_split(&self, region: &Region) -> bool {
+        //println!("split: region {:?}, range {:?}", region, self.range);
         let split_key = self.range.get_end();
         if split_key.is_empty() {
             return false;

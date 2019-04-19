@@ -74,9 +74,9 @@ ctl:
 	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${BIN_PATH}/
 
 bulkload:
-	cargo build --release --no-default-features --features "${ENABLE_FEATURES}" --bin tikv-bulkload
+	cargo build --no-default-features --features "${ENABLE_FEATURES}" --bin tikv-bulkload
 	@mkdir -p ${BIN_PATH}
-	@cp -f ${CARGO_TARGET_DIR}/release/tikv-bulkload ${BIN_PATH}/
+	@cp -f ${CARGO_TARGET_DIR}/debug/tikv-bulkload ${BIN_PATH}/
 
 run:
 	cargo run --no-default-features --features  "${ENABLE_FEATURES}" --bin tikv-server
