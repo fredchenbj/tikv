@@ -73,10 +73,10 @@ ctl:
 	@mkdir -p ${BIN_PATH}
 	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${BIN_PATH}/
 
-bulkload:
-	cargo build --no-default-features --features "${ENABLE_FEATURES}" --bin tikv-bulkload
+presplit:
+	cargo build --no-default-features --features "${ENABLE_FEATURES}" --bin tikv-presplit
 	@mkdir -p ${BIN_PATH}
-	@cp -f ${CARGO_TARGET_DIR}/debug/tikv-bulkload ${BIN_PATH}/
+	@cp -f ${CARGO_TARGET_DIR}/debug/tikv-presplit ${BIN_PATH}/
 
 run:
 	cargo run --no-default-features --features  "${ENABLE_FEATURES}" --bin tikv-server
@@ -84,7 +84,7 @@ run:
 release:
 	cargo build --no-default-features --release --features "${ENABLE_FEATURES}"
 	@mkdir -p ${BIN_PATH}
-	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${CARGO_TARGET_DIR}/release/tikv-server ${CARGO_TARGET_DIR}/release/tikv-importer ${BIN_PATH}/
+	@cp -f ${CARGO_TARGET_DIR}/release/tikv-ctl ${CARGO_TARGET_DIR}/release/tikv-server ${CARGO_TARGET_DIR}/release/tikv-importer ${CARGO_TARGET_DIR}/release/tikv-presplit ${BIN_PATH}/
 	bash scripts/check-sse4_2.sh
 
 unportable_release:

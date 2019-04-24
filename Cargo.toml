@@ -30,7 +30,7 @@ name = "tikv-ctl"
 name = "tikv-importer"
 
 [[bin]]
-name = "tikv-bulkload"
+name = "tikv-presplit"
 
 [[test]]
 name = "failpoints"
