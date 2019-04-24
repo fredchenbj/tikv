@@ -1165,7 +1165,7 @@ fn handle_batch_commands_request<E: Engine>(
             let resp = future_raw_update(&storage, req)
                 .map(oneof!(BatchCommandsResponse_Response_oneof_cmd::RawUpdate))
                 .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_update.inc());
-            response_batch_commands_request(executor, id, resp, tx, timer, thread_load);
+            response_batch_commands_request(id, resp, tx, timer);
         }
         Some(BatchCommandsRequest_Request_oneof_cmd::RawBatchUpdate(req)) => {
             let timer = GRPC_MSG_HISTOGRAM_VEC.raw_batch_update.start_coarse_timer();
@@ -1174,7 +1174,7 @@ fn handle_batch_commands_request<E: Engine>(
                     BatchCommandsResponse_Response_oneof_cmd::RawBatchUpdate
                 ))
                 .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_batch_update.inc());
-            response_batch_commands_request(executor, id, resp, tx, timer, thread_load);
+            response_batch_commands_request(id, resp, tx, timer);
         }
         Some(BatchCommandsRequest_Request_oneof_cmd::RawDelete(req)) => {
             let timer = GRPC_MSG_HISTOGRAM_VEC.raw_delete.start_coarse_timer();

@@ -1224,7 +1224,7 @@ impl<E: Engine> Storage<E> {
                 Key::from_encoded(key),
                 value,
             )],
-            box |(_, res): (_, engine::Result<_>)| callback(res.map_err(Error::from)),
+            Box::new(|(_, res): (_, kv::Result<_>)| callback(res.map_err(Error::from))),
         )?;
 
         KV_COMMAND_COUNTER_VEC
@@ -1251,10 +1251,11 @@ impl<E: Engine> Storage<E> {
             .into_iter()
             .map(|(k, v)| Modify::Update(cf, Key::from_encoded(k), v))
             .collect();
-        self.engine
-            .async_write(&ctx, requests, box |(_, res): (_, engine::Result<_>)| {
-                callback(res.map_err(Error::from))
-            })?;
+        self.engine.async_write(
+            &ctx,
+            requests,
+            Box::new(|(_, res): (_, kv::Result<_>)| callback(res.map_err(Error::from))),
+        )?;
         KV_COMMAND_COUNTER_VEC
             .with_label_values(&["raw_batch_update"])
             .inc();

@@ -219,7 +219,7 @@ fn write_modifies(engine: &Engines, modifies: Vec<Modify>) -> Result<()> {
                     wb.merge(k.as_encoded(), &v)
                 } else {
                     trace!("RocksEngine: update_cf {}, {}, {}", cf, k, escape(&v));
-                    let handle = rocksdb_util::get_cf_handle(db, cf)?;
+                    let handle = rocks::util::get_cf_handle(&engine.kv, cf)?;
                     wb.merge_cf(handle, k.as_encoded(), &v)
                 }
             }
