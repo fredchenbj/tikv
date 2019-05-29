@@ -104,5 +104,6 @@ fn main() {
             Ok(x) => println!("job {} runs {}", i, x),
             Err(_) => println!("job {} error", i),
         };
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
