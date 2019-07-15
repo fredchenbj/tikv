@@ -608,6 +608,11 @@ mod tests {
                         let handle = rocks::util::get_cf_handle(db, cf).unwrap();
                         wb.put_cf(handle, &k, &v).unwrap();
                     }
+                    Modify::Update(cf, k, v) => {
+                        let k = keys::data_key(k.as_encoded());
+                        let handle = rocks::util::get_cf_handle(db, cf).unwrap();
+                        wb.merge_cf(handle, &k, &v).unwrap();
+                    }
                     Modify::Delete(cf, k) => {
                         let k = keys::data_key(k.as_encoded());
                         let handle = rocks::util::get_cf_handle(db, cf).unwrap();
