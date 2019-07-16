@@ -275,7 +275,7 @@ impl Notifier {
     }
 }
 
-struct ApplyContext {
+pub struct ApplyContext {
     tag: String,
     timer: Option<SlowTimer>,
     host: Arc<CoprocessorHost>,
@@ -429,6 +429,11 @@ impl ApplyContext {
 
     #[inline]
     pub fn kv_wb(&self) -> &WriteBatch {
+        self.kv_wb.as_ref().unwrap()
+    }
+
+    #[inline]
+    pub fn kv_wb2(&mut self) -> &WriteBatch {
         self.kv_wb.as_ref().unwrap()
     }
 
@@ -640,6 +645,20 @@ pub struct ApplyDelegate {
 
     /// The local metrics, and it will be flushed periodically.
     metrics: ApplyMetrics,
+}
+
+pub fn create_cf_handle(ctx: &mut ApplyContext, req: &Request){
+    let (cf, _) = keys::get_cf_from_key(req.get_put().get_key());
+    let cf = match std::str::from_utf8(&cf) {
+        Ok(v) => v,
+        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+    };
+    if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
+        info!("get mut before");
+        let kv = Arc::get_mut(&mut ctx.engines.kv).unwrap();
+        info!("get mut after");
+        let _ = rocks::util::create_cf_handle(kv, cf);
+    }
 }
 
 impl ApplyDelegate {
@@ -1092,7 +1111,9 @@ impl ApplyDelegate {
 
         let mut ranges = vec![];
         let mut ssts = vec![];
+
         for req in requests {
+            create_cf_handle(ctx, req);
             let cmd_type = req.get_cmd_type();
             let mut resp = match cmd_type {
                 CmdType::Put => self.handle_put(ctx, req),
@@ -1153,37 +1174,20 @@ impl ApplyDelegate {
         util::check_key_in_region(key, &self.region)?;
 
         let resp = Response::new();
-        let (first, key) = keys::get_cf_from_key(key);
-
-        let s1 = match std::str::from_utf8(&first) {
+        let (cf, key)  = keys::get_cf_from_key(req.get_put().get_key());
+        let cf = match std::str::from_utf8(&cf) {
             Ok(v) => v,
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
-        info!("string cf: {}", s1);
-
-        let s2 = match std::str::from_utf8(&key) {
-            Ok(v) => v,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
-        info!("string key: {}", s2);
-
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
 
-        //let imut_kv = Arc::clone(&ctx.engines.kv);
-        if !req.get_put().get_cf().is_empty() || s1 != "" {
+        if !req.get_put().get_cf().is_empty() || cf != "" {
             //let cf = req.get_put().get_cf();
             // TODO: don't allow write preseved cfs.
-            let cf = s1;
             if cf == CF_LOCK {
                 self.metrics.lock_cf_written_bytes += key.len() as u64;
                 self.metrics.lock_cf_written_bytes += value.len() as u64;
-            }
-
-            // TODO: check whether cf exists or not.
-            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
-                let kv = Arc::get_mut(&mut ctx.engines.kv).unwrap();
-                let _ = rocks::util::create_cf_handle(kv, cf);
             }
 
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)

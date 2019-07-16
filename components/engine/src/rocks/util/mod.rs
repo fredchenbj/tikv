@@ -72,6 +72,13 @@ pub fn get_cf_handle<'a>(db: &'a DB, cf: &str) -> Result<&'a CFHandle> {
     Ok(handle)
 }
 
+pub fn get_cf_handle2<'a>(db: &'a mut DB, cf: &str) -> Result<&'a CFHandle> {
+    let handle = db
+        .cf_handle(cf)
+        .ok_or_else(|| Error::RocksDb(format!("cf {} not found", cf)))?;
+    Ok(handle)
+}
+
 pub fn existed_cf(db: &DB, cf: &str) -> bool {
     if let Some(_) = db.cf_handle(cf) {
         return true;
