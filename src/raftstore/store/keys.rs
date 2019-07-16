@@ -195,6 +195,24 @@ pub fn data_key(key: &[u8]) -> Vec<u8> {
     v
 }
 
+pub fn get_cf_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let mut index = 0;
+    let split = ':' as u8;
+    for &e in key.iter() {
+        if e == split {
+            break;
+        }
+        index = index + 1;
+    }
+
+    let mut v1 = Vec::with_capacity(index - 1);
+    let mut v2 = Vec::with_capacity(key.len() - index - 1);
+    let (first, second) = key.split_at(index);
+    v1.extend_from_slice(&first[1..]);
+    v2.extend_from_slice(&second[1..]);
+    (v1, v2)
+}
+
 pub fn origin_key(key: &[u8]) -> &[u8] {
     assert!(
         validate_data_key(key),

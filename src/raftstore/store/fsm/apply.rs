@@ -1084,7 +1084,7 @@ impl ApplyDelegate {
 
     fn exec_write_cmd(
         &mut self,
-        ctx: &ApplyContext,
+        ctx: &mut ApplyContext,
         req: &RaftCmdRequest,
     ) -> Result<(RaftCmdResponse, ApplyResult)> {
         let requests = req.get_requests();
@@ -1147,23 +1147,45 @@ impl ApplyDelegate {
 
 // Write commands related.
 impl ApplyDelegate {
-    fn handle_put(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
+    fn handle_put(&mut self, ctx: &mut ApplyContext, req: &Request) -> Result<Response> {
         let (key, value) = (req.get_put().get_key(), req.get_put().get_value());
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
         let resp = Response::new();
-        let key = keys::data_key(key);
+        let (first, key) = keys::get_cf_from_key(key);
+
+        let s1 = match std::str::from_utf8(&first) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        info!("string cf: {}", s1);
+
+        let s2 = match std::str::from_utf8(&key) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        info!("string key: {}", s2);
+
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_put().get_cf().is_empty() {
-            let cf = req.get_put().get_cf();
+
+        //let imut_kv = Arc::clone(&ctx.engines.kv);
+        if !req.get_put().get_cf().is_empty() || s1 != "" {
+            //let cf = req.get_put().get_cf();
             // TODO: don't allow write preseved cfs.
+            let cf = s1;
             if cf == CF_LOCK {
                 self.metrics.lock_cf_written_bytes += key.len() as u64;
                 self.metrics.lock_cf_written_bytes += value.len() as u64;
             }
+
             // TODO: check whether cf exists or not.
+            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
+                let kv = Arc::get_mut(&mut ctx.engines.kv).unwrap();
+                let _ = rocks::util::create_cf_handle(kv, cf);
+            }
+
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)
                 .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
                 .unwrap_or_else(|e| {

@@ -78,6 +78,11 @@ impl Key {
         Key(encoded_key)
     }
 
+    pub fn get_key(encoded_key: Vec<u8>, index: usize) -> Key {
+        let mut key = encoded_key;
+        Key(key.split_off(index + 1))
+    }
+
     /// Creates a key with reserved capacity for timestamp from encoded bytes slice.
     #[inline]
     pub fn from_encoded_slice(encoded_key: &[u8]) -> Key {

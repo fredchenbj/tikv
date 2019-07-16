@@ -436,7 +436,7 @@ mod tests {
         fn get(&self, _: &Key) -> EngineResult<Option<Value>> {
             Ok(None)
         }
-        fn get_cf(&self, _: CfName, _: &Key) -> EngineResult<Option<Value>> {
+        fn get_cf(&self, _: &str, _: &Key) -> EngineResult<Option<Value>> {
             Ok(None)
         }
         fn iter(&self, _: IterOption, _: ScanMode) -> EngineResult<Cursor<Self::Iter>> {

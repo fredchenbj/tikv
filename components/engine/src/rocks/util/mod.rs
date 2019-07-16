@@ -72,6 +72,19 @@ pub fn get_cf_handle<'a>(db: &'a DB, cf: &str) -> Result<&'a CFHandle> {
     Ok(handle)
 }
 
+pub fn existed_cf(db: &DB, cf: &str) -> bool {
+    if let Some(_) = db.cf_handle(cf) {
+        return true;
+    }
+    return false;
+}
+
+pub fn create_cf_handle<'a>(db: &'a mut DB, cf: &str) -> Result<&'a CFHandle> {
+    let handle = db.create_cf((cf, ColumnFamilyOptions::new()))?;
+
+    Ok(handle)
+}
+
 pub fn open_opt(
     opts: DBOptions,
     path: &str,

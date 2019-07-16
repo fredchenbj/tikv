@@ -1264,11 +1264,28 @@ impl<E: Engine> Storage<E> {
     pub fn async_raw_batch_get(
         &self,
         ctx: Context,
-        cf: String,
+        _cf: String,
         keys: Vec<Vec<u8>>,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
         const CMD: &str = "raw_batch_get";
         let priority = readpool::Priority::from(ctx.get_priority());
+
+        let mut v1 = Vec::with_capacity(keys[0].len());
+        let mut index = 0;
+        let split = ':' as u8;
+        for &e in keys[0].iter() {
+            if e == split {
+                break;
+            }
+            index = index + 1;
+            if index == 1 {
+                continue;
+            }
+            v1.push(e);
+        }
+        let _ = v1.split_off(index);
+        let cf = String::from_utf8(v1).unwrap();
+        info!("string cf: {}", cf);
 
         let res = self.read_pool.spawn_handle(priority, move || {
             tls_collect_command_count(CMD, priority);
@@ -1278,17 +1295,24 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
-                            let cf = match Self::rawkv_cf(&cf) {
-                                Ok(x) => x,
-                                Err(e) => return future::err(e),
-                            };
+                            let keys: Vec<Key> =
+                                keys.into_iter().map(|x| Key::get_key(x, index)).collect();
+                            //let cf = match Self::rawkv_cf(&cf) {
+                            //    Ok(x) => x,
+                            //    Err(e) => return future::err(e),
+                            //};
                             // no scan_count for this kind of op.
                             let mut stats = Statistics::default();
+
                             let result: Vec<Result<KvPair>> = keys
                                 .into_iter()
                                 .map(|k| {
-                                    let v = snapshot.get_cf(cf, &k);
+                                    let s = match std::str::from_utf8(k.as_encoded()) {
+                                        Ok(v) => v,
+                                        Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+                                    };
+                                    info!("string key: {}", s);
+                                    let v = snapshot.get_cf(&cf, &k);
                                     (k, v)
                                 })
                                 .filter(|&(_, ref v)| !(v.is_ok() && v.as_ref().unwrap().is_none()))
