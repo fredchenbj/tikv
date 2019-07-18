@@ -78,6 +78,18 @@ impl Key {
         Key(encoded_key)
     }
 
+    /// new added func
+    #[inline]
+    pub fn get_key(encoded_key: Vec<u8>, index: usize) -> Key {
+        let mut vec = Vec::new();
+        vec.push(encoded_key[0]);
+        for i in (index + 1)..encoded_key.len() {
+            vec.push(encoded_key[i]);
+        }
+        info!("get key: {:?}", vec);
+        Key(vec)
+    }
+
     /// Creates a key with reserved capacity for timestamp from encoded bytes slice.
     #[inline]
     pub fn from_encoded_slice(encoded_key: &[u8]) -> Key {

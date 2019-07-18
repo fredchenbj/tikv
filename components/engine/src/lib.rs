@@ -7,6 +7,7 @@
     slog_kv,
     slog_error,
     slog_warn,
+    slog_info,
     slog_record,
     slog_b,
     slog_log,

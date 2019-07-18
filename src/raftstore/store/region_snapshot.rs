@@ -142,15 +142,31 @@ impl Peekable for RegionSnapshot {
         self.snap.get_value(&data_key)
     }
 
-    fn get_value_cf(&self, cf: &str, key: &[u8]) -> EngineResult<Option<DBVector>> {
+    fn get_value_cf(&self, _cf: &str, key: &[u8]) -> EngineResult<Option<DBVector>> {
         engine::util::check_key_in_range(
             key,
             self.region.get_id(),
             self.region.get_start_key(),
             self.region.get_end_key(),
         )?;
-        let data_key = keys::data_key(key);
-        self.snap.get_value_cf(cf, &data_key)
+
+        let mut v1 = Vec::with_capacity(key.len());
+        let mut index = 0;
+        let split = ':' as u8;
+        for &e in key.iter() {
+            if e == split {
+                break;
+            }
+            index = index + 1;
+            if index == 1 {
+                continue;
+            }
+            v1.push(e);
+        }
+
+        let cf = String::from_utf8(v1).unwrap();
+        let data_key = keys::get_key(key, index);
+        self.snap.get_value_cf(&cf, &data_key)
     }
 }
 

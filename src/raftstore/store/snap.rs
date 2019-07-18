@@ -13,6 +13,7 @@ use std::time::Instant;
 use std::{error, result, str, thread, time, u64};
 
 use crc::crc32::{self, Digest, Hasher32};
+use engine::rocks::util::config;
 use engine::rocks::util::{
     get_fastest_supported_compression_type, prepare_sst_for_ingestion, validate_sst_for_ingestion,
 };
@@ -31,7 +32,10 @@ use protobuf::RepeatedField;
 use raft::eraftpb::Snapshot as RaftSnapshot;
 
 use crate::raftstore::errors::Error as RaftStoreError;
-use crate::raftstore::store::keys::{self, enc_end_key, enc_start_key};
+use crate::raftstore::store::keys::{
+    self, enc_end_key, enc_end_key2, enc_start_key, enc_start_key2, get_cf_from_region,
+    is_raw_region,
+};
 use crate::raftstore::store::util::check_key_in_region;
 use crate::raftstore::store::{RaftRouter, StoreMsg};
 use crate::raftstore::Result as RaftStoreResult;
@@ -50,6 +54,7 @@ use crate::raftstore::store::peer_storage::JOB_STATUS_CANCELLING;
 
 // Data in CF_RAFT should be excluded for a snapshot.
 pub const SNAPSHOT_CFS: &[CfName] = &[CF_DEFAULT, CF_LOCK, CF_WRITE];
+pub const CFS: &[&str] = &["default", "lock", "write"];
 
 pub const SNAPSHOT_VERSION: u64 = 2;
 
@@ -106,6 +111,7 @@ pub struct SnapKey {
     pub region_id: u64,
     pub term: u64,
     pub idx: u64,
+    pub cf: String,
 }
 
 impl SnapKey {
@@ -115,13 +121,28 @@ impl SnapKey {
             region_id,
             term,
             idx,
+            cf: String::from("default"),
         }
     }
 
-    pub fn from_region_snap(region_id: u64, snap: &RaftSnapshot) -> SnapKey {
+    #[inline]
+    pub fn new2(region_id: u64, term: u64, idx: u64, cf: String) -> SnapKey {
+        SnapKey {
+            region_id,
+            term,
+            idx,
+            cf,
+        }
+    }
+
+    pub fn set_cf(&mut self, cf: String) {
+        self.cf = cf;
+    }
+
+    pub fn from_region_snap(region_id: u64, snap: &RaftSnapshot, cf: String) -> SnapKey {
         let index = snap.get_metadata().get_index();
         let term = snap.get_metadata().get_term();
-        SnapKey::new(region_id, term, index)
+        SnapKey::new2(region_id, term, index, cf)
     }
 
     pub fn from_snap(snap: &RaftSnapshot) -> io::Result<SnapKey> {
@@ -130,10 +151,10 @@ impl SnapKey {
             return Err(io::Error::new(ErrorKind::Other, e));
         }
 
-        Ok(SnapKey::from_region_snap(
-            snap_data.get_region().get_id(),
-            snap,
-        ))
+        let region = snap_data.get_region();
+        let cf = String::from_utf8(get_cf_from_region(&region)).unwrap();
+
+        Ok(SnapKey::from_region_snap(region.get_id(), snap, cf))
     }
 }
 
@@ -226,13 +247,6 @@ pub fn retry_delete_snapshot(
 fn gen_snapshot_meta(cf_files: &[CfFile]) -> RaftStoreResult<SnapshotMeta> {
     let mut meta = Vec::with_capacity(cf_files.len());
     for cf_file in cf_files {
-        if SNAPSHOT_CFS.iter().find(|&cf| cf_file.cf == *cf).is_none() {
-            return Err(box_err!(
-                "failed to encode invalid snapshot cf {}",
-                cf_file.cf
-            ));
-        }
-
         let mut cf_file_meta = SnapshotCFFile::new();
         cf_file_meta.set_cf(cf_file.cf.to_owned());
         cf_file_meta.set_size(cf_file.size);
@@ -280,7 +294,7 @@ fn check_file_size_and_checksum(
 
 #[derive(Default)]
 struct CfFile {
-    pub cf: CfName,
+    pub cf: String,
     pub path: PathBuf,
     pub tmp_path: PathBuf,
     pub clone_path: PathBuf,
@@ -338,12 +352,31 @@ impl Snap {
         let prefix = format!("{}_{}", snap_prefix, key);
         let display_path = Snap::get_display_path(&dir_path, &prefix);
 
-        let mut cf_files = Vec::with_capacity(SNAPSHOT_CFS.len());
-        for cf in SNAPSHOT_CFS {
-            let filename = format!("{}_{}{}", prefix, cf, SST_FILE_SUFFIX);
+        let mut cf_files: Vec<CfFile>;
+        if key.cf == String::from("default") {
+            cf_files = Vec::with_capacity(SNAPSHOT_CFS.len());
+            for cf in SNAPSHOT_CFS {
+                let filename = format!("{}_{}{}", prefix, cf, SST_FILE_SUFFIX);
+                let path = dir_path.join(&filename);
+                let tmp_path = dir_path.join(format!("{}{}", filename, TMP_FILE_SUFFIX));
+                let clone_path = dir_path.join(format!("{}{}", filename, CLONE_FILE_SUFFIX));
+                let cf = cf.to_string();
+                let cf_file = CfFile {
+                    cf,
+                    path,
+                    tmp_path,
+                    clone_path,
+                    ..Default::default()
+                };
+                cf_files.push(cf_file);
+            }
+        } else {
+            cf_files = Vec::with_capacity(1);
+            let filename = format!("{}_{}{}", prefix, &key.cf, SST_FILE_SUFFIX);
             let path = dir_path.join(&filename);
             let tmp_path = dir_path.join(format!("{}{}", filename, TMP_FILE_SUFFIX));
             let clone_path = dir_path.join(format!("{}{}", filename, CLONE_FILE_SUFFIX));
+            let cf = key.cf.clone();
             let cf_file = CfFile {
                 cf,
                 path,
@@ -491,14 +524,14 @@ impl Snap {
         self.hold_tmp_files = true;
 
         for cf_file in &mut self.cf_files {
-            if plain_file_used(cf_file.cf) {
+            if plain_file_used(&cf_file.cf) {
                 let f = OpenOptions::new()
                     .write(true)
                     .create_new(true)
                     .open(&cf_file.tmp_path)?;
                 cf_file.file = Some(f);
             } else {
-                let handle = kv_snap.cf_handle(cf_file.cf)?;
+                let handle = kv_snap.cf_handle(&cf_file.cf)?;
                 let mut io_options = kv_snap.get_db().get_options_cf(handle).clone();
                 io_options.compression(get_fastest_supported_compression_type());
                 // in rocksdb 5.5.1, SstFileWriter will try to use bottommost_compression and
@@ -587,13 +620,13 @@ impl Snap {
                 // this is checked when loading the snapshot meta.
                 continue;
             }
-            if plain_file_used(cf_file.cf) {
+            if plain_file_used(&cf_file.cf) {
                 check_file_size_and_checksum(&cf_file.path, cf_file.size, cf_file.checksum)?;
             } else {
                 prepare_sst_for_ingestion(&cf_file.path, &cf_file.clone_path)?;
                 validate_sst_for_ingestion(
                     &kv_engine,
-                    cf_file.cf,
+                    &cf_file.cf,
                     &cf_file.clone_path,
                     cf_file.size,
                     cf_file.checksum,
@@ -616,6 +649,27 @@ impl Snap {
         }
     }
 
+    /// add lock and distributed consistency
+    fn add_cf_file(&mut self, cf: &str) {
+        let filename = format!("{}_{}{}", SNAP_GEN_PREFIX, cf, SST_FILE_SUFFIX);
+        let path = self.dir_path.join(&filename);
+        let tmp_path = self
+            .dir_path
+            .join(format!("{}{}", filename, TMP_FILE_SUFFIX));
+        let clone_path = self
+            .dir_path
+            .join(format!("{}{}", filename, CLONE_FILE_SUFFIX));
+        let cf = cf.to_string();
+        let cf_file = CfFile {
+            cf,
+            path,
+            tmp_path,
+            clone_path,
+            ..Default::default()
+        };
+        self.cf_files.push(cf_file);
+    }
+
     fn add_kv(&mut self, k: &[u8], v: &[u8]) -> RaftStoreResult<()> {
         let cf_file = &mut self.cf_files[self.cf_index];
         if let Some(writer) = cf_file.sst_writer.as_mut() {
@@ -633,7 +687,7 @@ impl Snap {
 
     fn save_cf_files(&mut self) -> io::Result<()> {
         for cf_file in &mut self.cf_files {
-            if plain_file_used(cf_file.cf) {
+            if plain_file_used(&cf_file.cf) {
                 let _ = cf_file.file.take();
             } else if cf_file.kv_count == 0 {
                 let _ = cf_file.sst_writer.take().unwrap();
@@ -708,9 +762,30 @@ impl Snap {
         }
 
         let mut snap_key_count = 0;
-        let (begin_key, end_key) = (enc_start_key(region), enc_end_key(region));
-        for cf in SNAPSHOT_CFS {
-            self.switch_to_cf_file(cf)?;
+        let cfs;
+        let begin_key;
+        let end_key;
+        let is_raw = is_raw_region(region);
+        let raw_cf;
+        let cf_vec;
+        if is_raw {
+            begin_key = enc_start_key2(region);
+            end_key = enc_end_key2(region);
+            raw_cf = get_cf_from_region(region);
+            cf_vec = vec![str::from_utf8(&raw_cf).unwrap()];
+            cfs = cf_vec.as_slice();
+            self.cf_files.clear();
+        } else {
+            begin_key = enc_start_key(region);
+            end_key = enc_end_key(region);
+            cfs = CFS;
+        }
+
+        for cf in cfs {
+            if let Err(_) = self.switch_to_cf_file(cf) {
+                self.add_cf_file(cf);
+                self.switch_to_cf_file(cf)?;
+            }
             let (cf_key_count, cf_size) = if plain_file_used(cf) {
                 self.build_plain_cf_file(kv_snap, cf, &begin_key, &end_key)?
             } else {
@@ -757,8 +832,7 @@ impl Snap {
         self.save_cf_files()?;
         stat.kv_count = snap_key_count;
         // save snapshot meta to meta file
-        let snapshot_meta = gen_snapshot_meta(&self.cf_files[..])?;
-        self.meta_file.meta = snapshot_meta;
+        self.meta_file.meta = gen_snapshot_meta(&self.cf_files[..])?;
         self.save_meta_file()?;
 
         Ok(())
@@ -806,7 +880,7 @@ impl Snap {
 fn apply_plain_cf_file<D: CompactBytesFromFileDecoder>(
     decoder: &mut D,
     options: &ApplyOptions,
-    handle: &CFHandle,
+    handle: CFHandle,
 ) -> Result<()> {
     let wb = WriteBatch::new();
     let mut batch_size = 0;
@@ -989,8 +1063,17 @@ impl Snapshot for Snap {
             }
 
             check_abort(&options.abort)?;
-            let cf_handle = box_try!(rocks::util::get_cf_handle(&options.db, cf_file.cf));
-            if plain_file_used(cf_file.cf) {
+
+            if !rocks::util::existed_cf(&options.db, &cf_file.cf) {
+                let _ = rocks::util::create_cf_handle_with_option(
+                    &options.db,
+                    &cf_file.cf,
+                    config::get_raw_cf_option(),
+                );
+                info!("import create cf");
+            }
+            let cf_handle = box_try!(rocks::util::get_cf_handle(&options.db, &cf_file.cf));
+            if plain_file_used(&cf_file.cf) {
                 let file = box_try!(File::open(&cf_file.path));
                 apply_plain_cf_file(&mut BufReader::new(file), &options, cf_handle)?;
             } else {
@@ -1286,6 +1369,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
+        info!("building snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1297,6 +1381,7 @@ impl SnapManager {
             Arc::clone(&core.snap_size),
             Box::new(self.clone()),
         )?;
+        info!("sending snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 
@@ -1316,6 +1401,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
+        info!("receiving snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1332,6 +1418,7 @@ impl SnapManager {
                 format!("snapshot of {:?} not exists.", key).to_string(),
             )));
         }
+        info!("applying snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 
@@ -1567,7 +1654,7 @@ pub mod tests {
         let key = keys::data_key(TEST_KEY);
         // write some data into each cf
         for (i, cf) in db.cf_names().into_iter().enumerate() {
-            let handle = rocks::util::get_cf_handle(&db, cf)?;
+            let handle = rocks::util::get_cf_handle(&db, cf.as_str())?;
             let mut p = Peer::new();
             p.set_store_id(TEST_STORE_ID);
             p.set_id((i + 1) as u64);

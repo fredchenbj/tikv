@@ -12,6 +12,7 @@ use std::{cmp, usize};
 
 use crossbeam::channel::{TryRecvError, TrySendError};
 use engine::rocks;
+use engine::rocks::util::config;
 use engine::rocks::Writable;
 use engine::rocks::{Snapshot, WriteBatch, WriteOptions};
 use engine::Engines;
@@ -1152,17 +1153,34 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
+        let (first, key) = keys::get_cf_from_key(key);
+
+        let s1 = match std::str::from_utf8(&first) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
         let resp = Response::new();
-        let key = keys::data_key(key);
+        let key = keys::data_key(&key);
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_put().get_cf().is_empty() {
-            let cf = req.get_put().get_cf();
+        if !req.get_put().get_cf().is_empty() || s1 != "" {
+            let cf = s1;
             // TODO: don't allow write preseved cfs.
             if cf == CF_LOCK {
                 self.metrics.lock_cf_written_bytes += key.len() as u64;
                 self.metrics.lock_cf_written_bytes += value.len() as u64;
             }
+
+            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
+                let _ = rocks::util::create_cf_handle_with_option(
+                    &ctx.engines.kv,
+                    cf,
+                    config::get_raw_cf_option(),
+                );
+                info!("put create cf");
+            }
+
             // TODO: check whether cf exists or not.
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)
                 .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
@@ -1196,17 +1214,34 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
+        let (first, key) = keys::get_cf_from_key(key);
+
+        let s1 = match std::str::from_utf8(&first) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
         let resp = Response::new();
-        let key = keys::data_key(key);
+        let key = keys::data_key(&key);
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_update().get_cf().is_empty() {
-            let cf = req.get_update().get_cf();
+        if !req.get_update().get_cf().is_empty() || s1 != "" {
+            let cf = s1;
             // TODO: don't allow write preseved cfs.
             if cf == CF_LOCK {
                 self.metrics.lock_cf_written_bytes += key.len() as u64;
                 self.metrics.lock_cf_written_bytes += value.len() as u64;
             }
+
+            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
+                let _ = rocks::util::create_cf_handle_with_option(
+                    &ctx.engines.kv,
+                    cf,
+                    config::get_raw_cf_option(),
+                );
+                info!("update create cf");
+            }
+
             // TODO: check whether cf exists or not.
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)
                 .and_then(|handle| {
@@ -1244,12 +1279,25 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
-        let key = keys::data_key(key);
+        let (first, key) = keys::get_cf_from_key(key);
+
+        let s1 = match std::str::from_utf8(&first) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        let key = keys::data_key(&key);
         // since size_diff_hint is not accurate, so we just skip calculate the value size.
         self.metrics.size_diff_hint -= key.len() as i64;
         let resp = Response::new();
-        if !req.get_delete().get_cf().is_empty() {
-            let cf = req.get_delete().get_cf();
+        if !req.get_delete().get_cf().is_empty() || s1 != "" {
+            let cf = s1;
+
+            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
+                let _ = rocks::util::create_cf_handle(&ctx.engines.kv, cf);
+                info!("delete create cf");
+            }
+
             // TODO: check whether cf exists or not.
             rocks::util::get_cf_handle(&ctx.engines.kv, cf)
                 .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))

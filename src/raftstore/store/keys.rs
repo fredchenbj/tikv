@@ -195,6 +195,49 @@ pub fn data_key(key: &[u8]) -> Vec<u8> {
     v
 }
 
+pub fn get_key(encoded_key: &[u8], index: usize) -> Vec<u8> {
+    let mut vec = Vec::new();
+    vec.extend_from_slice(DATA_PREFIX_KEY);
+    vec.push(encoded_key[0]);
+    for i in (index + 1)..encoded_key.len() {
+        vec.push(encoded_key[i]);
+    }
+    vec
+}
+
+pub fn is_raw_key(key: &[u8]) -> bool {
+    let split = ':' as u8;
+    for &e in key.iter() {
+        if e == split {
+            return true;
+        }
+    }
+    false
+}
+
+/// return (cf, key), default cf is "default"
+pub fn get_cf_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    let mut index = 0;
+    let split = ':' as u8;
+    for &e in key.iter() {
+        if e == split {
+            break;
+        }
+        index = index + 1;
+    }
+    if index == key.len() {
+        return (String::from("default").into_bytes(), key.to_owned());
+    }
+
+    let mut v1 = Vec::with_capacity(index - 1);
+    let mut v2 = Vec::with_capacity(key.len() - index);
+    let (first, second) = key.split_at(index);
+    v1.extend_from_slice(&first[1..]);
+    v2.extend_from_slice(&first[0..1]);
+    v2.extend_from_slice(&second[1..]);
+    (v1, v2)
+}
+
 pub fn origin_key(key: &[u8]) -> &[u8] {
     assert!(
         validate_data_key(key),
@@ -202,6 +245,18 @@ pub fn origin_key(key: &[u8]) -> &[u8] {
         hex::encode_upper(key)
     );
     &key[DATA_PREFIX_KEY.len()..]
+}
+
+/// is old region or not
+pub fn is_raw_region(region: &Region) -> bool {
+    is_raw_key(region.get_start_key())
+}
+
+/// get the `cf` of the current region
+pub fn get_cf_from_region(region: &Region) -> Vec<u8> {
+    assert!(!region.get_peers().is_empty());
+    let (cf, _) = get_cf_from_key(region.get_start_key());
+    cf
 }
 
 /// Get the `start_key` of current region in encoded form.
@@ -212,6 +267,15 @@ pub fn enc_start_key(region: &Region) -> Vec<u8> {
     data_key(region.get_start_key())
 }
 
+/// Get the `start_key` of current region in another encoded form.
+pub fn enc_start_key2(region: &Region) -> Vec<u8> {
+    // only initialized region's start_key can be encoded, otherwise there must be bugs
+    // somewhere.
+    assert!(!region.get_peers().is_empty());
+    let (_, key) = get_cf_from_key(region.get_start_key());
+    data_key(&key)
+}
+
 /// Get the `end_key` of current region in encoded form.
 pub fn enc_end_key(region: &Region) -> Vec<u8> {
     // only initialized region's end_key can be encoded, otherwise there must be bugs
@@ -220,12 +284,30 @@ pub fn enc_end_key(region: &Region) -> Vec<u8> {
     data_end_key(region.get_end_key())
 }
 
+/// Get the `end_key` of current region in another encoded form.
+pub fn enc_end_key2(region: &Region) -> Vec<u8> {
+    // only initialized region's end_key can be encoded, otherwise there must be bugs
+    // somewhere.
+    assert!(!region.get_peers().is_empty());
+    data_end_key2(region.get_end_key())
+}
+
 #[inline]
 pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     if region_end_key.is_empty() {
         DATA_MAX_KEY.to_vec()
     } else {
         data_key(region_end_key)
+    }
+}
+
+#[inline]
+pub fn data_end_key2(region_end_key: &[u8]) -> Vec<u8> {
+    if region_end_key.is_empty() {
+        DATA_MAX_KEY.to_vec()
+    } else {
+        let (_, key) = get_cf_from_key(region_end_key);
+        data_key(&key)
     }
 }
 

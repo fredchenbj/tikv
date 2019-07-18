@@ -44,7 +44,7 @@ pub fn delete_all_in_range(
     }
 
     for cf in db.cf_names() {
-        delete_all_in_range_cf(db, cf, start_key, end_key, use_delete_range)?;
+        delete_all_in_range_cf(db, cf.as_str(), start_key, end_key, use_delete_range)?;
     }
 
     Ok(())
@@ -101,7 +101,7 @@ pub fn delete_all_files_in_range(db: &DB, start_key: &[u8], end_key: &[u8]) -> R
     }
 
     for cf in db.cf_names() {
-        let handle = rocks::util::get_cf_handle(db, cf)?;
+        let handle = rocks::util::get_cf_handle(db, cf.as_str())?;
         db.delete_files_in_range_cf(handle, start_key, end_key, false)?;
     }
 

@@ -50,7 +50,7 @@ impl BTreeEngine {
         }
     }
 
-    pub fn get_cf(&self, cf: CfName) -> Arc<RwLockTree> {
+    pub fn get_cf(&self, cf: &str) -> Arc<RwLockTree> {
         let index = self
             .cf_names
             .iter()
@@ -215,7 +215,7 @@ impl Snapshot for BTreeEngineSnapshot {
     fn get(&self, key: &Key) -> EngineResult<Option<Value>> {
         self.get_cf(CF_DEFAULT, key)
     }
-    fn get_cf(&self, cf: CfName, key: &Key) -> EngineResult<Option<Value>> {
+    fn get_cf(&self, cf: &str, key: &Key) -> EngineResult<Option<Value>> {
         let tree_cf = self.inner_engine.get_cf(cf);
         let tree = tree_cf.read().unwrap();
         let v = tree.get(key);
