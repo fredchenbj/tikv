@@ -691,7 +691,7 @@ impl TablePropertiesCollectorFactory for RangePropertiesCollectorFactory {
 
 pub fn get_range_entries_and_versions(
     engine: &DB,
-    cf: &CFHandle,
+    cf: CFHandle,
     start: &[u8],
     end: &[u8],
 ) -> Option<(u64, u64)> {

@@ -284,7 +284,7 @@ impl Snapshot for RocksSnapshot {
         Ok(v.map(|v| v.to_vec()))
     }
 
-    fn get_cf(&self, cf: CfName, key: &Key) -> Result<Option<Value>> {
+    fn get_cf(&self, cf: &str, key: &Key) -> Result<Option<Value>> {
         trace!("RocksSnapshot: get_cf"; "cf" => cf, "key" => %key);
         let v = box_try!(self.get_value_cf(cf, key.as_encoded()));
         Ok(v.map(|v| v.to_vec()))
@@ -298,7 +298,7 @@ impl Snapshot for RocksSnapshot {
 
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> Result<Cursor<Self::Iter>> {

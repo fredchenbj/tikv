@@ -19,7 +19,7 @@ use raft::eraftpb::ConfChangeType;
 
 use super::metrics::*;
 use crate::pd::{Error, PdClient, RegionStat};
-use crate::raftstore::coprocessor::{get_region_approximate_keys, get_region_approximate_size};
+use crate::raftstore::coprocessor::{get_region_approximate_keys_raw, get_region_approximate_size};
 use crate::raftstore::store::cmd_resp::new_error;
 use crate::raftstore::store::util::is_epoch_stale;
 use crate::raftstore::store::util::KeysInfoFormatter;
@@ -672,7 +672,7 @@ impl<T: PdClient> Runnable<Task> for Runner<T> {
                     get_region_approximate_size(&self.db, &region).unwrap_or_default()
                 });
                 let approximate_keys = approximate_keys.unwrap_or_else(|| {
-                    get_region_approximate_keys(&self.db, &region).unwrap_or_default()
+                    get_region_approximate_keys_raw(&self.db, &region).unwrap_or_default()
                 });
                 let (
                     read_bytes_delta,

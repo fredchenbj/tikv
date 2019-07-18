@@ -21,6 +21,7 @@ use futures::{future, Future};
 use kvproto::errorpb;
 use kvproto::kvrpcpb::{CommandPri, Context, KeyRange, LockInfo};
 
+use crate::raftstore::store::keys;
 use crate::server::readpool::{self, Builder as ReadPoolBuilder, ReadPool};
 use crate::server::ServerRaftStoreRouter;
 use tikv_util::collections::HashMap;
@@ -1277,15 +1278,9 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let cf = match Self::rawkv_cf(&cf) {
-                                Ok(x) => x,
-                                Err(e) => return future::err(e),
-                            };
-                            // no scan_count for this kind of op.
-
                             let key_len = key.len();
                             let result = snapshot
-                                .get_cf(cf, &Key::from_encoded(key))
+                                .get_cf(&cf, &Key::from_encoded(key))
                                 // map storage::engine::Error -> storage::Error
                                 .map_err(Error::from)
                                 .map(|r| {
@@ -1332,16 +1327,12 @@ impl<E: Engine> Storage<E> {
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
                             let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
-                            let cf = match Self::rawkv_cf(&cf) {
-                                Ok(x) => x,
-                                Err(e) => return future::err(e),
-                            };
-                            // no scan_count for this kind of op.
+
                             let mut stats = Statistics::default();
                             let result: Vec<Result<KvPair>> = keys
                                 .into_iter()
                                 .map(|k| {
-                                    let v = snapshot.get_cf(cf, &k);
+                                    let v = snapshot.get_cf(&cf, &k);
                                     (k, v)
                                 })
                                 .filter(|&(_, ref v)| !(v.is_ok() && v.as_ref().unwrap().is_none()))
@@ -1583,7 +1574,7 @@ impl<E: Engine> Storage<E> {
         if let Some(end) = end_key {
             option.set_upper_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
         }
-        let mut cursor = snapshot.iter_cf(Self::rawkv_cf(cf)?, option, ScanMode::Forward)?;
+        let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
         let statistics = statistics.mut_cf_statistics(cf);
         if !cursor.seek(start_key, statistics)? {
             return Ok(vec![]);
@@ -1621,7 +1612,7 @@ impl<E: Engine> Storage<E> {
         if let Some(end) = end_key {
             option.set_lower_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
         }
-        let mut cursor = snapshot.iter_cf(Self::rawkv_cf(cf)?, option, ScanMode::Backward)?;
+        let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Backward)?;
         let statistics = statistics.mut_cf_statistics(cf);
         if !cursor.reverse_seek(start_key, statistics)? {
             return Ok(vec![]);
@@ -1654,7 +1645,7 @@ impl<E: Engine> Storage<E> {
     pub fn async_raw_scan(
         &self,
         ctx: Context,
-        cf: String,
+        _cf: String,
         key: Vec<u8>,
         end_key: Option<Vec<u8>>,
         limit: usize,
@@ -1672,6 +1663,7 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
+                            let cf = keys::get_cf_from_encoded_region_start_key(&key);
                             let end_key = end_key.map(Key::from_encoded);
 
                             let mut statistics = Statistics::default();
@@ -1760,7 +1752,7 @@ impl<E: Engine> Storage<E> {
     pub fn async_raw_batch_scan(
         &self,
         ctx: Context,
-        cf: String,
+        _cf: String,
         mut ranges: Vec<KeyRange>,
         each_limit: usize,
         key_only: bool,
@@ -1784,7 +1776,9 @@ impl<E: Engine> Storage<E> {
                             let mut result = Vec::new();
                             let ranges_len = ranges.len();
                             for i in 0..ranges_len {
-                                let start_key = Key::from_encoded(ranges[i].take_start_key());
+                                let start_key = ranges[i].take_start_key();
+                                let cf = keys::get_cf_from_encoded_region_start_key(&start_key);
+                                let start_key = Key::from_encoded(start_key);
                                 let end_key = ranges[i].take_end_key();
                                 let end_key = if end_key.is_empty() {
                                     if i + 1 == ranges_len {

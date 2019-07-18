@@ -17,14 +17,13 @@ use engine::{util as engine_util, Engines, Mutable, Peekable, Snapshot};
 use kvproto::raft_serverpb::{PeerState, RaftApplyState, RegionLocalState};
 use raft::eraftpb::Snapshot as RaftSnapshot;
 
+use crate::raftstore::store::keys;
 use crate::raftstore::store::peer_storage::{
     JOB_STATUS_CANCELLED, JOB_STATUS_CANCELLING, JOB_STATUS_FAILED, JOB_STATUS_FINISHED,
     JOB_STATUS_PENDING, JOB_STATUS_RUNNING,
 };
 use crate::raftstore::store::snap::{plain_file_used, Error, Result, SNAPSHOT_CFS};
-use crate::raftstore::store::{
-    self, check_abort, keys, ApplyOptions, SnapEntry, SnapKey, SnapManager,
-};
+use crate::raftstore::store::{self, check_abort, ApplyOptions, SnapEntry, SnapKey, SnapManager};
 use tikv_util::threadpool::{DefaultContext, ThreadPool, ThreadPoolBuilder};
 use tikv_util::time;
 use tikv_util::timer::Timer;
@@ -285,6 +284,7 @@ impl SnapContext {
 
         // clear up origin data.
         let region = region_state.get_region().clone();
+        let cf = keys::get_cf_from_encoded_region(&region);
         let start_key = keys::enc_start_key(&region);
         let end_key = keys::enc_end_key(&region);
         check_abort(&abort)?;
@@ -310,7 +310,7 @@ impl SnapContext {
             };
         let term = apply_state.get_truncated_state().get_term();
         let idx = apply_state.get_truncated_state().get_index();
-        let snap_key = SnapKey::new(region_id, term, idx);
+        let snap_key = SnapKey::new_with_cf(region_id, term, idx, cf);
         self.mgr.register(snap_key.clone(), SnapEntry::Applying);
         defer!({
             self.mgr.deregister(&snap_key, &SnapEntry::Applying);
@@ -783,7 +783,7 @@ mod tests {
         .unwrap();
 
         for cf_name in engine.kv.cf_names() {
-            let cf = engine.kv.cf_handle(cf_name).unwrap();
+            let cf = engine.kv.cf_handle(cf_name.as_str()).unwrap();
             for i in 0..6 {
                 engine.kv.put_cf(cf, &[i], &[i]).unwrap();
                 engine.kv.put_cf(cf, &[i + 1], &[i + 1]).unwrap();

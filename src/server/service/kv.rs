@@ -2188,7 +2188,7 @@ fn extract_key_error(err: &storage::Error) -> KeyError {
             key_error.set_deadlock(deadlock);
         }
         _ => {
-            error!("txn aborts"; "err" => ?err);
+            error!("aborts"; "err" => ?err);
             key_error.set_abort(format!("{:?}", err));
         }
     }

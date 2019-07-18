@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder as ThreadBuilder, JoinHandle};
 use std::time::{Duration, Instant};
 
-use engine::rocks::util::get_cf_handle;
+use engine::rocks::util::{existed_cf, get_cf_handle};
 use engine::rocks::DB;
 use engine::util::delete_all_in_range_cf;
 use engine::{CF_DEFAULT, CF_LOCK, CF_WRITE};
@@ -23,7 +23,7 @@ use super::metrics::*;
 use super::mvcc::{MvccReader, MvccTxn};
 use super::{Callback, Error, Key, Result};
 use crate::pd::PdClient;
-use crate::raftstore::store::keys;
+use crate::raftstore::store::keys::{self, TABLE_LEN};
 use crate::raftstore::store::msg::StoreMsg;
 use crate::raftstore::store::util::find_peer;
 use crate::server::transport::ServerRaftStoreRouter;
@@ -296,11 +296,48 @@ impl<E: Engine> GCRunner<E> {
         Ok(())
     }
 
+    fn unsafe_destroy_cfs(&self, start_key: &Key, end_key: &Key) -> Result<()> {
+        let mut start_data_key = keys::data_key(start_key.as_encoded());
+        let end_data_key = keys::data_key(end_key.as_encoded());
+
+        let shard_key = start_data_key.split_off(TABLE_LEN);
+        assert_eq!(start_data_key, end_data_key);
+
+        let local_storage = self.local_storage.as_ref().ok_or_else(|| {
+            let e: Error = box_err!("unsafe destroy cfs not supported: local_storage not set");
+            warn!("unsafe destroy cfs failed"; "err" => ?e);
+            e
+        })?;
+
+        let table_name = end_data_key.as_slice();
+        let bits = shard_key[0];
+        for i in 0..bits {
+            let mut cf_name = Vec::new();
+            cf_name.extend_from_slice(table_name);
+            cf_name.push(i);
+            let cf = &hex::encode_upper(cf_name);
+            if existed_cf(local_storage, cf) {
+                local_storage.drop_cf(cf).map_err(|e| {
+                    let e: Error = box_err!(e);
+                    warn!(
+                        "unsafe destroy cfs failed at drop_cf"; "err" => ?e
+                    );
+                    e
+                })?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn unsafe_destroy_range(&self, _: &Context, start_key: &Key, end_key: &Key) -> Result<()> {
         info!(
             "unsafe destroy range started";
             "start_key" => %start_key, "end_key" => %end_key
         );
+        if start_key > end_key {
+            return self.unsafe_destroy_cfs(start_key, end_key);
+        }
 
         // TODO: Refine usage of errors
 

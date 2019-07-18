@@ -24,8 +24,14 @@ tikv_alloc = { path = "../tikv_alloc", default-features = false }
 serde = "1.0"
 serde_derive = "1.0"
 toml = "0.4"
-hex = "0.3"
+hex = "0.4"
 tikv_util = { path = "../tikv_util" }
+json="0.11.0"
+serde_json = "1.0.40"
+
+[dependencies.reqwest]
+version = "0.9"
+default-features = false
 
 [dependencies.prometheus]
 version = "0.4.2"
@@ -33,9 +39,9 @@ default-features = false
 features = ["nightly"]
 
 [dependencies.engine_rocksdb]
-git = "https://github.com/pingcap/rust-rocksdb.git"
+git = "https://github.com/fredchenbj/rust-rocksdb.git"
 package = "rocksdb"
-branch = "tikv-3.0"
+branch = "fredchenbj/release-3.0.3"
 
 [dev-dependencies]
 tempdir = "0.3"

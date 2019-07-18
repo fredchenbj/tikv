@@ -321,8 +321,8 @@ mod tests {
     use crate::storage::mvcc::Error as MvccError;
     use crate::storage::mvcc::MvccTxn;
     use crate::storage::{
-        CfName, Cursor, Iterator, Key, KvPair, Mutation, Options, Snapshot, Statistics,
-        TestEngineBuilder, Value,
+        Cursor, Iterator, Key, KvPair, Mutation, Options, Snapshot, Statistics, TestEngineBuilder,
+        Value,
     };
     use engine::IterOption;
     use kvproto::kvrpcpb::{Context, IsolationLevel};
@@ -461,7 +461,7 @@ mod tests {
         fn get(&self, _: &Key) -> EngineResult<Option<Value>> {
             Ok(None)
         }
-        fn get_cf(&self, _: CfName, _: &Key) -> EngineResult<Option<Value>> {
+        fn get_cf(&self, _: &str, _: &Key) -> EngineResult<Option<Value>> {
             Ok(None)
         }
         fn iter(&self, _: IterOption, _: ScanMode) -> EngineResult<Cursor<Self::Iter>> {
@@ -470,12 +470,7 @@ mod tests {
                 ScanMode::Forward,
             ))
         }
-        fn iter_cf(
-            &self,
-            _: CfName,
-            _: IterOption,
-            _: ScanMode,
-        ) -> EngineResult<Cursor<Self::Iter>> {
+        fn iter_cf(&self, _: &str, _: IterOption, _: ScanMode) -> EngineResult<Cursor<Self::Iter>> {
             Ok(Cursor::new(
                 MockRangeSnapshotIter::default(),
                 ScanMode::Forward,

@@ -69,26 +69,25 @@ impl<C: CasualRouter> Runner<C> {
         let mut cf_names = snap.cf_names();
         cf_names.sort();
 
+        let cf = keys::get_cf_from_encoded_region(&region);
         // Computes the hash from all the keys and values in the range of the Region.
         let start_key = keys::enc_start_key(&region);
         let end_key = keys::enc_end_key(&region);
-        for cf in cf_names {
-            let res = snap.scan_cf(cf, &start_key, &end_key, false, |k, v| {
-                digest.write(k);
-                digest.write(v);
-                Ok(true)
-            });
-            if let Err(e) = res {
-                REGION_HASH_COUNTER_VEC
-                    .with_label_values(&["compute", "failed"])
-                    .inc();
-                error!(
-                    "failed to calculate hash";
-                    "region_id" => region_id,
-                    "err" => %e,
-                );
-                return;
-            }
+        let res = snap.scan_cf(cf.as_str(), &start_key, &end_key, false, |k, v| {
+            digest.write(k);
+            digest.write(v);
+            Ok(true)
+        });
+        if let Err(e) = res {
+            REGION_HASH_COUNTER_VEC
+                .with_label_values(&["compute", "failed"])
+                .inc();
+            error!(
+                "failed to calculate hash";
+                "region_id" => region_id,
+                "err" => %e,
+            );
+            return;
         }
 
         // Computes the hash from the Region state too.

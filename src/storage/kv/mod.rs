@@ -108,14 +108,10 @@ pub trait Snapshot: Send + Clone {
     type Iter: Iterator;
 
     fn get(&self, key: &Key) -> Result<Option<Value>>;
-    fn get_cf(&self, cf: CfName, key: &Key) -> Result<Option<Value>>;
+    fn get_cf(&self, cf: &str, key: &Key) -> Result<Option<Value>>;
     fn iter(&self, iter_opt: IterOption, mode: ScanMode) -> Result<Cursor<Self::Iter>>;
-    fn iter_cf(
-        &self,
-        cf: CfName,
-        iter_opt: IterOption,
-        mode: ScanMode,
-    ) -> Result<Cursor<Self::Iter>>;
+    fn iter_cf(&self, cf: &str, iter_opt: IterOption, mode: ScanMode)
+        -> Result<Cursor<Self::Iter>>;
     fn get_properties(&self) -> Result<TablePropertiesCollection> {
         self.get_properties_cf(CF_DEFAULT)
     }
@@ -290,7 +286,7 @@ impl Statistics {
             CF_DEFAULT => &mut self.data,
             CF_LOCK => &mut self.lock,
             CF_WRITE => &mut self.write,
-            _ => unreachable!(),
+            _ => &mut self.data,
         }
     }
 }

@@ -793,10 +793,11 @@ pub fn flush_engine_histogram_metrics(t: HistType, value: HistogramData, name: &
 
 pub fn flush_engine_properties(engine: &DB, name: &str, shared_block_cache: bool) {
     for cf in engine.cf_names() {
+        let cf = cf.as_str();
         let handle = rocks::util::get_cf_handle(engine, cf).unwrap();
         // It is important to monitor each cf's size, especially the "raft" and "lock" column
         // families.
-        let cf_used_size = rocks::util::get_engine_cf_used_size(engine, handle);
+        let cf_used_size = rocks::util::get_engine_cf_used_size(engine, &handle);
         STORE_ENGINE_SIZE_GAUGE_VEC
             .with_label_values(&[name, cf])
             .set(cf_used_size as i64);
