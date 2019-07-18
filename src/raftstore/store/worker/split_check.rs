@@ -7,7 +7,7 @@ use std::mem;
 use std::sync::Arc;
 
 use engine::rocks::DBIterator;
-use engine::{CfName, CF_WRITE, LARGE_CFS};
+use engine::CF_WRITE;
 use engine::{IterOption, Iterable, DB};
 use kvproto::metapb::Region;
 use kvproto::metapb::RegionEpoch;
@@ -27,11 +27,11 @@ pub struct KeyEntry {
     key: Vec<u8>,
     pos: usize,
     value_size: usize,
-    cf: CfName,
+    cf: String,
 }
 
 impl KeyEntry {
-    pub fn new(key: Vec<u8>, pos: usize, value_size: usize, cf: CfName) -> KeyEntry {
+    pub fn new(key: Vec<u8>, pos: usize, value_size: usize, cf: String) -> KeyEntry {
         KeyEntry {
             key,
             pos,
@@ -44,8 +44,12 @@ impl KeyEntry {
         self.key.as_ref()
     }
 
+    pub fn cf(&self) -> &str {
+        self.cf.as_ref()
+    }
+
     pub fn is_commit_version(&self) -> bool {
-        self.cf == CF_WRITE
+        self.cf == CF_WRITE.to_string()
     }
 
     pub fn entry_size(&self) -> usize {
@@ -67,14 +71,14 @@ impl Ord for KeyEntry {
 }
 
 struct MergedIterator<'a> {
-    iters: Vec<(CfName, DBIterator<&'a DB>)>,
+    iters: Vec<(String, DBIterator<&'a DB>)>,
     heap: BinaryHeap<KeyEntry>,
 }
 
 impl<'a> MergedIterator<'a> {
     fn new(
         db: &'a DB,
-        cfs: &[CfName],
+        cfs: &[String],
         start_key: &[u8],
         end_key: &[u8],
         fill_cache: bool,
@@ -93,10 +97,10 @@ impl<'a> MergedIterator<'a> {
                     iter.key().to_vec(),
                     pos,
                     iter.value().len(),
-                    *cf,
+                    cf.to_string(),
                 ));
             }
-            iters.push((*cf, iter));
+            iters.push((cf.to_string(), iter));
         }
         Ok(MergedIterator { iters, heap })
     }
@@ -109,7 +113,7 @@ impl<'a> MergedIterator<'a> {
         let (cf, iter) = &mut self.iters[pos];
         if iter.next() {
             // TODO: avoid copy key.
-            let mut e = KeyEntry::new(iter.key().to_vec(), pos, iter.value().len(), cf);
+            let mut e = KeyEntry::new(iter.key().to_vec(), pos, iter.value().len(), cf.to_string());
             let mut front = self.heap.peek_mut().unwrap();
             mem::swap(&mut e, &mut front);
             Some(e)
@@ -249,7 +253,9 @@ impl<S: CasualRouter> Runner<S> {
         end_key: &[u8],
     ) -> Result<Vec<Vec<u8>>> {
         let timer = CHECK_SPILT_HISTOGRAM.start_coarse_timer();
-        MergedIterator::new(self.engine.as_ref(), LARGE_CFS, start_key, end_key, false).map(
+        let cf = keys::get_cf_from_encoded_region(region);
+        let cfs = vec![cf];
+        MergedIterator::new(self.engine.as_ref(), &cfs, start_key, end_key, false).map(
             |mut iter| {
                 while let Some(e) = iter.next() {
                     if host.on_kv(region, &e) {

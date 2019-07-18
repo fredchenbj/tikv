@@ -5,6 +5,7 @@ pub mod engine_metrics;
 mod event_listener;
 pub mod io_limiter;
 pub mod metrics_flusher;
+mod properties;
 pub mod security;
 pub mod stats;
 
@@ -26,7 +27,7 @@ use crate::rocks::{
     CColumnFamilyDescriptor, ColumnFamilyOptions, CompactOptions, CompactionOptions,
     DBCompressionType, DBOptions, Env, Range, SliceTransform, DB,
 };
-use crate::{Error, Result, ALL_CFS, CF_DEFAULT};
+use crate::{Error, Result, CF_DEFAULT};
 use tikv_util::file::calc_crc32;
 
 pub use self::event_listener::EventListener;
@@ -65,10 +66,31 @@ pub fn get_fastest_supported_compression_type() -> DBCompressionType {
         .unwrap_or(&DBCompressionType::No)
 }
 
-pub fn get_cf_handle<'a>(db: &'a DB, cf: &str) -> Result<&'a CFHandle> {
+pub fn get_cf_handle<'a>(db: &'a DB, cf: &str) -> Result<CFHandle<'a>> {
     let handle = db
         .cf_handle(cf)
         .ok_or_else(|| Error::RocksDb(format!("cf {} not found", cf)))?;
+    Ok(handle)
+}
+
+pub fn existed_cf(db: &DB, cf: &str) -> bool {
+    if let Some(_) = db.cf_handle(cf) {
+        return true;
+    }
+    return false;
+}
+
+pub fn create_cf_handle<'a>(db: &'a DB, cf: &str) -> Result<CFHandle<'a>> {
+    let handle = db.create_cf((cf, ColumnFamilyOptions::new()))?;
+    Ok(handle)
+}
+
+pub fn create_cf_handle_with_option<'a>(
+    db: &'a DB,
+    cf: &str,
+    cf_option: ColumnFamilyOptions,
+) -> Result<CFHandle<'a>> {
+    let handle = db.create_cf((cf, cf_option))?;
     Ok(handle)
 }
 
@@ -161,7 +183,7 @@ pub fn new_engine_opt(
             cfs_v.push(x.cf);
             cf_opts_v.push(x.options.clone());
         }
-        let mut db = DB::open_cf(db_opt, path, cfs_v.into_iter().zip(cf_opts_v).collect())?;
+        let db = DB::open_cf(db_opt, path, cfs_v.into_iter().zip(cf_opts_v).collect())?;
         for x in cfs_opts {
             if x.cf == CF_DEFAULT {
                 continue;
@@ -211,6 +233,7 @@ pub fn new_engine_opt(
     let mut cfs_v: Vec<&str> = Vec::new();
     let mut cfs_opts_v: Vec<ColumnFamilyOptions> = Vec::new();
     for cf in &existed {
+        info!("existed cf: {}", cf);
         cfs_v.push(cf);
         match cfs_opts.iter().find(|x| x.cf == *cf) {
             Some(x) => {
@@ -219,21 +242,12 @@ pub fn new_engine_opt(
                 cfs_opts_v.push(tmp.options);
             }
             None => {
-                cfs_opts_v.push(ColumnFamilyOptions::new());
+                cfs_opts_v.push(config::get_raw_cf_option());
             }
         }
     }
     let cfds = cfs_v.into_iter().zip(cfs_opts_v).collect();
-    let mut db = DB::open_cf(db_opt, path, cfds).unwrap();
-
-    // Drops discarded column families.
-    //    for cf in existed.iter().filter(|x| needed.iter().find(|y| y == x).is_none()) {
-    for cf in cfs_diff(&existed, &needed) {
-        // Never drop default column families.
-        if cf != CF_DEFAULT {
-            db.drop_cf(cf)?;
-        }
-    }
+    let db = DB::open_cf(db_opt, path, cfds).unwrap();
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
@@ -268,8 +282,8 @@ pub fn db_exist(path: &str) -> bool {
 ///
 pub fn get_engine_used_size(engine: Arc<DB>) -> u64 {
     let mut used_size: u64 = 0;
-    for cf in ALL_CFS {
-        let handle = get_cf_handle(&engine, cf).unwrap();
+    for cf in engine.cf_names() {
+        let handle = get_cf_handle(&engine, &cf).unwrap();
         let cf_used_size = engine
             .get_property_int_cf(handle, ROCKSDB_TOTAL_SST_FILES_SIZE)
             .expect("rocksdb is too old, missing total-sst-files-size property");
@@ -288,7 +302,7 @@ pub fn get_engine_used_size(engine: Arc<DB>) -> u64 {
 /// Gets engine's compression ratio at given level.
 pub fn get_engine_compression_ratio_at_level(
     engine: &DB,
-    handle: &CFHandle,
+    handle: CFHandle,
     level: usize,
 ) -> Option<f64> {
     let prop = format!("{}{}", ROCKSDB_COMPRESSION_RATIO_AT_LEVEL, level);
@@ -304,20 +318,20 @@ pub fn get_engine_compression_ratio_at_level(
 }
 
 /// Gets the number of files at given level of given column family.
-pub fn get_cf_num_files_at_level(engine: &DB, handle: &CFHandle, level: usize) -> Option<u64> {
+pub fn get_cf_num_files_at_level(engine: &DB, handle: CFHandle, level: usize) -> Option<u64> {
     let prop = format!("{}{}", ROCKSDB_NUM_FILES_AT_LEVEL, level);
     engine.get_property_int_cf(handle, &prop)
 }
 
 /// Gets the number of immutable mem-table of given column family.
-pub fn get_num_immutable_mem_table(engine: &DB, handle: &CFHandle) -> Option<u64> {
+pub fn get_num_immutable_mem_table(engine: &DB, handle: CFHandle) -> Option<u64> {
     engine.get_property_int_cf(handle, ROCKSDB_NUM_IMMUTABLE_MEM_TABLE)
 }
 
 /// Checks whether any column family sets `disable_auto_compactions` to `True` or not.
 pub fn auto_compactions_is_disabled(engine: &DB) -> bool {
     for cf_name in engine.cf_names() {
-        let cf = engine.cf_handle(cf_name).unwrap();
+        let cf = engine.cf_handle(cf_name.as_str()).unwrap();
         if engine.get_options_cf(cf).get_disable_auto_compactions() {
             return true;
         }
@@ -414,7 +428,7 @@ pub fn roughly_cleanup_ranges(db: &DB, ranges: &[(Vec<u8>, Vec<u8>)]) -> Result<
     }
 
     for cf in db.cf_names() {
-        let handle = get_cf_handle(db, cf)?;
+        let handle = get_cf_handle(db, cf.as_str())?;
         db.delete_files_in_ranges_cf(handle, &delete_ranges, /* include_end */ false)?;
     }
 
@@ -424,7 +438,7 @@ pub fn roughly_cleanup_ranges(db: &DB, ranges: &[(Vec<u8>, Vec<u8>)]) -> Result<
 /// Compacts the column families in the specified range by manual or not.
 pub fn compact_range(
     db: &DB,
-    handle: &CFHandle,
+    handle: CFHandle,
     start_key: Option<&[u8]>,
     end_key: Option<&[u8]>,
     exclusive_manual: bool,
@@ -448,7 +462,7 @@ pub fn compact_files_in_range(
     output_level: Option<i32>,
 ) -> Result<()> {
     for cf_name in db.cf_names() {
-        compact_files_in_range_cf(db, cf_name, start, end, output_level)?;
+        compact_files_in_range_cf(db, cf_name.as_str(), start, end, output_level)?;
     }
     Ok(())
 }
@@ -718,7 +732,7 @@ mod tests {
         // Just do nothing
     }
 
-    fn gen_sst_with_kvs(db: &DB, cf: &CFHandle, path: &str, kvs: &[(&str, &str)]) {
+    fn gen_sst_with_kvs(db: &DB, cf: CFHandle, path: &str, kvs: &[(&str, &str)]) {
         let opts = db.get_options_cf(cf).clone();
         let mut writer = SstFileWriter::new(EnvOptions::new(), opts);
         writer.open(path).unwrap();
@@ -728,7 +742,7 @@ mod tests {
         writer.finish().unwrap();
     }
 
-    fn check_db_with_kvs(db: &DB, cf: &CFHandle, kvs: &[(&str, &str)]) {
+    fn check_db_with_kvs(db: &DB, cf: CFHandle, kvs: &[(&str, &str)]) {
         for &(k, v) in kvs {
             assert_eq!(db.get_cf(cf, k.as_bytes()).unwrap().unwrap(), v.as_bytes());
         }

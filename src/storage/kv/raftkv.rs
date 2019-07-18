@@ -381,7 +381,7 @@ impl Snapshot for RegionSnapshot {
         Ok(v.map(|v| v.to_vec()))
     }
 
-    fn get_cf(&self, cf: CfName, key: &Key) -> kv::Result<Option<Value>> {
+    fn get_cf(&self, cf: &str, key: &Key) -> kv::Result<Option<Value>> {
         fail_point!("raftkv_snapshot_get_cf", |_| Err(box_err!(
             "injected error for get_cf"
         )));
@@ -398,7 +398,7 @@ impl Snapshot for RegionSnapshot {
 
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> kv::Result<Cursor<Self::Iter>> {

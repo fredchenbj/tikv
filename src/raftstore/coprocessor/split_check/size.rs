@@ -6,7 +6,6 @@ use std::sync::Mutex;
 
 use engine::rocks;
 use engine::rocks::DB;
-use engine::LARGE_CFS;
 use engine::{util, Range};
 use engine::{CF_DEFAULT, CF_WRITE};
 use kvproto::metapb::Region;
@@ -195,11 +194,8 @@ impl<C: CasualRouter + Send> SplitCheckObserver for SizeCheckObserver<C> {
 
 /// Get the approximate size of the range.
 pub fn get_region_approximate_size(db: &DB, region: &Region) -> Result<u64> {
-    let mut size = 0;
-    for cfname in LARGE_CFS {
-        size += get_region_approximate_size_cf(db, cfname, &region)?
-    }
-    Ok(size)
+    let cf = keys::get_cf_from_encoded_region(&region);
+    Ok(get_region_approximate_size_cf(db, &cf, &region)?)
 }
 
 pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
@@ -207,6 +203,7 @@ pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) ->
     let start_key = keys::enc_start_key(region);
     let end_key = keys::enc_end_key(region);
     let range = Range::new(&start_key, &end_key);
+    // Return the approximate number of records and size in the range of memtables of the cf.
     let (_, mut size) = db.get_approximate_memtable_stats_cf(cf, &range);
 
     let collection = box_try!(util::get_range_properties_cf(
@@ -495,7 +492,7 @@ pub mod tests {
         let region = Region::default();
         let mut ctx = ObserverContext::new(&region);
         loop {
-            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 4, CF_WRITE);
+            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 4, CF_WRITE.to_string());
             if checker.on_kv(&mut ctx, &data) {
                 break;
             }
@@ -510,7 +507,7 @@ pub mod tests {
         let region = Region::default();
         let mut ctx = ObserverContext::new(&region);
         for _ in 0..2 {
-            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 5, CF_WRITE);
+            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 5, CF_WRITE.to_string());
             if checker.on_kv(&mut ctx, &data) {
                 break;
             }

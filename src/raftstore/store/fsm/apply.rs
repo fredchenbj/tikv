@@ -12,11 +12,12 @@ use std::{cmp, usize};
 
 use crossbeam::channel::{TryRecvError, TrySendError};
 use engine::rocks;
+use engine::rocks::util::config;
 use engine::rocks::Writable;
 use engine::rocks::{Snapshot, WriteBatch, WriteOptions};
 use engine::Engines;
 use engine::{util as engine_util, Mutable, Peekable};
-use engine::{ALL_CFS, CF_DEFAULT, CF_LOCK, CF_RAFT, CF_WRITE};
+use engine::{CF_DEFAULT, CF_RAFT, CF_WRITE};
 use kvproto::import_sstpb::SSTMeta;
 use kvproto::metapb::{Peer as PeerMeta, Region};
 use kvproto::raft_cmdpb::{
@@ -1154,43 +1155,33 @@ impl ApplyDelegate {
 
         let resp = Response::new();
         let key = keys::data_key(key);
+        let cf = keys::get_cf_from_encoded_region(&self.region);
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_put().get_cf().is_empty() {
-            let cf = req.get_put().get_cf();
-            // TODO: don't allow write preseved cfs.
-            if cf == CF_LOCK {
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-                self.metrics.lock_cf_written_bytes += value.len() as u64;
-            }
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to write ({}, {}) to cf {}: {:?}",
-                        self.tag,
-                        hex::encode_upper(&key),
-                        escape(value),
-                        cf,
-                        e
-                    )
-                });
-        } else {
-            ctx.kv_wb().put(&key, value).unwrap_or_else(|e| {
+
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            let _ = rocks::util::create_cf_handle_with_option(
+                &ctx.engines.kv,
+                &cf,
+                config::get_raw_cf_option(),
+            );
+            info!("put create cf: {}", cf);
+        }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
+            .unwrap_or_else(|e| {
                 panic!(
-                    "{} failed to write ({}, {}): {:?}",
+                    "{} failed to write ({}, {}) to cf {}: {:?}",
                     self.tag,
                     hex::encode_upper(&key),
                     escape(value),
+                    cf,
                     e
-                );
+                )
             });
-        }
         Ok(resp)
     }
 
-    // handle update
     fn handle_update(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
         let (key, value) = (req.get_update().get_key(), req.get_update().get_value());
         // region key range has no data prefix, so we must use origin key to check.
@@ -1198,44 +1189,34 @@ impl ApplyDelegate {
 
         let resp = Response::new();
         let key = keys::data_key(key);
+        let cf = keys::get_cf_from_encoded_region(&self.region);
         self.metrics.size_diff_hint += key.len() as i64;
         self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_update().get_cf().is_empty() {
-            let cf = req.get_update().get_cf();
-            // TODO: don't allow write preseved cfs.
-            if cf == CF_LOCK {
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-                self.metrics.lock_cf_written_bytes += value.len() as u64;
-            }
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| {
-                    ctx.kv_wb()
-                        .merge_cf(handle, &key, value)
-                        .map_err(Into::into)
-                }) // to modify
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to write ({}, {}) to cf {}: {:?}",
-                        self.tag,
-                        escape(&key),
-                        escape(value),
-                        cf,
-                        e
-                    )
-                });
-        } else {
-            ctx.kv_wb().merge(&key, value).unwrap_or_else(|e| {
-                // to modify
+
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            let _ = rocks::util::create_cf_handle_with_option(
+                &ctx.engines.kv,
+                &cf,
+                config::get_raw_cf_option(),
+            );
+            info!("update create cf: {}", cf);
+        }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| {
+                ctx.kv_wb()
+                    .merge_cf(handle, &key, value)
+                    .map_err(Into::into)
+            }) // to modify
+            .unwrap_or_else(|e| {
                 panic!(
-                    "{} failed to write ({}, {}): {:?}",
+                    "{} failed to merge ({}, {}) to cf {}: {:?}",
                     self.tag,
                     escape(&key),
                     escape(value),
+                    cf,
                     e
-                );
+                )
             });
-        }
         Ok(resp)
     }
 
@@ -1244,32 +1225,17 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
-        let key = keys::data_key(key);
-        // since size_diff_hint is not accurate, so we just skip calculate the value size.
-        self.metrics.size_diff_hint -= key.len() as i64;
         let resp = Response::new();
-        if !req.get_delete().get_cf().is_empty() {
-            let cf = req.get_delete().get_cf();
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to delete {}: {}",
-                        self.tag,
-                        hex::encode_upper(&key),
-                        e
-                    )
-                });
-
-            if cf == CF_LOCK {
-                // delete is a kind of write for RocksDB.
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-            } else {
-                self.metrics.delete_keys_hint += 1;
-            }
-        } else {
-            ctx.kv_wb().delete(&key).unwrap_or_else(|e| {
+        let key = keys::data_key(key);
+        let cf = keys::get_cf_from_encoded_region(&self.region);
+        self.metrics.size_diff_hint -= key.len() as i64;
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            error!("key: {:?} don't have cf: {}", key, cf);
+            return Err(Error::Key(String::from("handle delete error")));
+        }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
+            .unwrap_or_else(|e| {
                 panic!(
                     "{} failed to delete {}: {}",
                     self.tag,
@@ -1277,9 +1243,7 @@ impl ApplyDelegate {
                     e
                 )
             });
-            self.metrics.delete_keys_hint += 1;
-        }
-
+        self.metrics.delete_keys_hint += 1;
         Ok(resp)
     }
 
@@ -1309,14 +1273,8 @@ impl ApplyDelegate {
         }
 
         let resp = Response::new();
-        let mut cf = req.get_delete_range().get_cf();
-        if cf.is_empty() {
-            cf = CF_DEFAULT;
-        }
-        if ALL_CFS.iter().find(|x| **x == cf).is_none() {
-            return Err(box_err!("invalid delete range command, cf: {:?}", cf));
-        }
-        let handle = rocks::util::get_cf_handle(&ctx.engines.kv, cf).unwrap();
+        let cf = keys::get_cf_from_encoded_region(&self.region);
+        let handle = rocks::util::get_cf_handle(&ctx.engines.kv, &cf).unwrap();
 
         let start_key = keys::data_key(s_key);
         // Use delete_files_in_range to drop as many sst files as possible, this
@@ -1340,7 +1298,7 @@ impl ApplyDelegate {
             // Delete all remaining keys.
             engine_util::delete_all_in_range_cf(
                 &ctx.engines.kv,
-                cf,
+                &cf,
                 &start_key,
                 &end_key,
                 use_delete_range,
@@ -1351,7 +1309,7 @@ impl ApplyDelegate {
                     self.tag,
                     hex::encode_upper(&start_key),
                     hex::encode_upper(&end_key),
-                    cf,
+                    &cf,
                     e
                 );
             });
@@ -2944,6 +2902,7 @@ mod tests {
     use crate::raftstore::store::util::{new_learner_peer, new_peer};
     use engine::rocks::Writable;
     use engine::{WriteBatch, DB};
+    use engine::{ALL_CFS, CF_LOCK};
     use kvproto::metapb::{self, RegionEpoch};
     use kvproto::raft_cmdpb::*;
     use protobuf::Message;

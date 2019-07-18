@@ -1185,7 +1185,7 @@ impl<'a, T: Transport, C: PdClient> PeerFsmDelegate<'a, T, C> {
 
         let region_id = msg.get_region_id();
         let snap = msg.get_message().get_snapshot();
-        let key = SnapKey::from_region_snap(region_id, snap);
+        let key = SnapKey::from_snap(snap).unwrap();
         let mut snap_data = RaftSnapshotData::new();
         snap_data.merge_from_bytes(snap.get_data())?;
         let snap_region = snap_data.take_region();
