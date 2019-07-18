@@ -1373,17 +1373,17 @@ pub fn do_snapshot(
     // Release raft engine snapshot to avoid too many open files.
     drop(raft_snap);
 
-    let key = SnapKey::new(region_id, term, idx);
-
-    mgr.register(key.clone(), SnapEntry::Generating);
-    defer!(mgr.deregister(&key, &SnapEntry::Generating));
-
     let state: RegionLocalState = kv_snap
-        .get_msg_cf(CF_RAFT, &keys::region_state_key(key.region_id))
+        .get_msg_cf(CF_RAFT, &keys::region_state_key(region_id))
         .and_then(|res| match res {
             None => Err(box_err!("could not find region info")),
             Some(state) => Ok(state),
         })?;
+
+    let cf = keys::get_cf_from_encoded_region(state.get_region());
+    let key = SnapKey::new_with_cf(region_id, term, idx, cf);
+    mgr.register(key.clone(), SnapEntry::Generating);
+    defer!(mgr.deregister(&key, &SnapEntry::Generating));
 
     if state.get_state() != PeerState::Normal {
         return Err(storage_error(format!(
@@ -1514,7 +1514,7 @@ pub fn maybe_upgrade_from_2_to_3(
 
     // Create v2.0.x kv engine.
     let kv_cfs_opts = kv_cfg.build_cf_opts_v2(cache);
-    let mut kv_engine = rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts)?;
+    let kv_engine = rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts)?;
 
     // Move meta data from kv engine to raft engine.
     let upgrade_raft_wb = WriteBatch::new();

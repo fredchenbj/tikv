@@ -45,6 +45,9 @@ pub const SNAPSHOT_RAFT_STATE_SUFFIX: u8 = 0x04;
 // For region meta
 pub const REGION_STATE_SUFFIX: u8 = 0x01;
 
+pub const SHARD_KEY_LEN: usize = 1;
+pub const TABLE_LEN: usize = 4;
+
 #[inline]
 fn make_region_prefix(region_id: u64, suffix: u8) -> [u8; 11] {
     let mut key = [0; 11];
@@ -229,6 +232,23 @@ pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     }
 }
 
+pub fn get_cf_from_encoded_region_start_key(encoded_key: &[u8]) -> String {
+    assert!(encoded_key.len() >= TABLE_LEN);
+    String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap()
+}
+
+pub fn get_cf_from_encoded_region(region: &Region) -> String {
+    assert!(!region.get_peers().is_empty());
+    let region_start_key = region.get_start_key();
+    if region_start_key.is_empty() {
+        // let the last not-used region to mapped to default cf
+        "default".to_string()
+    } else {
+        assert!(region_start_key.len() >= TABLE_LEN);
+        String::from_utf8(region_start_key[0..TABLE_LEN].to_vec()).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,9 +388,9 @@ mod tests {
         assert_eq!(enc_start_key(&region), vec![DATA_PREFIX]);
         assert_eq!(enc_end_key(&region), vec![DATA_PREFIX + 1]);
 
-        region.set_start_key(vec![1]);
-        region.set_end_key(vec![2]);
-        assert_eq!(enc_start_key(&region), vec![DATA_PREFIX, 1]);
-        assert_eq!(enc_end_key(&region), vec![DATA_PREFIX, 2]);
+        region.set_start_key(b"test1".to_vec());
+        region.set_end_key(b"test2".to_vec());
+        assert_eq!(enc_start_key(&region), b"ztest1".to_vec());
+        assert_eq!(enc_end_key(&region), b"ztest2".to_vec());
     }
 }

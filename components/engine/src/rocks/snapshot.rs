@@ -32,12 +32,22 @@ impl Snapshot {
         SyncSnapshot(Arc::new(self))
     }
 
-    pub fn cf_names(&self) -> Vec<&str> {
+    pub fn cf_names(&self) -> Vec<String> {
         self.db.cf_names()
     }
 
-    pub fn cf_handle(&self, cf: &str) -> Result<&CFHandle> {
-        super::util::get_cf_handle(&self.db, cf).map_err(Error::from)
+    pub fn cf_handle(&self, cf: &str) -> Result<CFHandle> {
+        if !super::util::existed_cf(&self.db, cf) {
+            info!("cf_handle create cf");
+            super::util::create_cf_handle_with_option(
+                &self.db,
+                cf,
+                super::util::config::get_raw_cf_option(),
+            )
+            .map_err(Error::from)
+        } else {
+            super::util::get_cf_handle(&self.db, cf).map_err(Error::from)
+        }
     }
 
     pub fn get_db(&self) -> Arc<DB> {
@@ -53,7 +63,16 @@ impl Snapshot {
     }
 
     pub fn db_iterator_cf(&self, cf: &str, iter_opt: IterOption) -> Result<DBIterator<Arc<DB>>> {
-        let handle = super::util::get_cf_handle(&self.db, cf)?;
+        let handle = if !super::util::existed_cf(&self.db, cf) {
+            info!("db_iterator_cf create cf");
+            super::util::create_cf_handle_with_option(
+                &self.db,
+                cf,
+                super::util::config::get_raw_cf_option(),
+            )?
+        } else {
+            super::util::get_cf_handle(&self.db, cf)?
+        };
         let mut opt = iter_opt.build_read_opts();
         unsafe {
             opt.set_snapshot(&self.snap);
@@ -107,7 +126,16 @@ impl Iterable for Snapshot {
     }
 
     fn new_iterator_cf(&self, cf: &str, iter_opt: IterOption) -> Result<DBIterator<&DB>> {
-        let handle = super::util::get_cf_handle(&self.db, cf)?;
+        let handle = if !super::util::existed_cf(&self.db, cf) {
+            info!("new_iterator_cf create cf");
+            super::util::create_cf_handle_with_option(
+                &self.db,
+                cf,
+                super::util::config::get_raw_cf_option(),
+            )?
+        } else {
+            super::util::get_cf_handle(&self.db, cf)?
+        };
         let mut opt = iter_opt.build_read_opts();
         unsafe {
             opt.set_snapshot(&self.snap);
@@ -127,7 +155,16 @@ impl Peekable for Snapshot {
     }
 
     fn get_value_cf(&self, cf: &str, key: &[u8]) -> Result<Option<DBVector>> {
-        let handle = super::util::get_cf_handle(&self.db, cf)?;
+        let handle = if !super::util::existed_cf(&self.db, cf) {
+            info!("get_value_cf create cf");
+            super::util::create_cf_handle_with_option(
+                &self.db,
+                cf,
+                super::util::config::get_raw_cf_option(),
+            )?
+        } else {
+            super::util::get_cf_handle(&self.db, cf)?
+        };
         let mut opt = ReadOptions::new();
         unsafe {
             opt.set_snapshot(&self.snap);

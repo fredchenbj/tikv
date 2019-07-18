@@ -142,7 +142,7 @@ impl Peekable for RegionSnapshot {
         self.snap.get_value(&data_key)
     }
 
-    fn get_value_cf(&self, cf: &str, key: &[u8]) -> EngineResult<Option<DBVector>> {
+    fn get_value_cf(&self, _cf: &str, key: &[u8]) -> EngineResult<Option<DBVector>> {
         engine::util::check_key_in_range(
             key,
             self.region.get_id(),
@@ -150,7 +150,9 @@ impl Peekable for RegionSnapshot {
             self.region.get_end_key(),
         )?;
         let data_key = keys::data_key(key);
-        self.snap.get_value_cf(cf, &data_key)
+        let cf = keys::get_cf_from_encoded_region(&self.region);
+
+        self.snap.get_value_cf(&cf, &data_key)
     }
 }
 

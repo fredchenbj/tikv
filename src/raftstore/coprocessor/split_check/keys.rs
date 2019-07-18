@@ -116,7 +116,7 @@ impl<C: CasualRouter + Send> SplitCheckObserver for KeysCheckObserver<C> {
     ) {
         let region = ctx.region();
         let region_id = region.get_id();
-        let region_keys = match get_region_approximate_keys(engine, region) {
+        let region_keys = match get_region_approximate_keys_txn(engine, region) {
             Ok(keys) => keys,
             Err(e) => {
                 warn!(
@@ -172,8 +172,9 @@ impl<C: CasualRouter + Send> SplitCheckObserver for KeysCheckObserver<C> {
 }
 
 /// Get the approximate number of keys in the range.
-pub fn get_region_approximate_keys(db: &DB, region: &Region) -> Result<u64> {
+pub fn get_region_approximate_keys_txn(db: &DB, region: &Region) -> Result<u64> {
     // try to get from RangeProperties first.
+    // here only consider about txn situation
     match get_region_approximate_keys_cf(db, CF_WRITE, region) {
         Ok(v) => {
             if v > 0 {
@@ -191,6 +192,12 @@ pub fn get_region_approximate_keys(db: &DB, region: &Region) -> Result<u64> {
     let cf = box_try!(rocks::util::get_cf_handle(db, CF_WRITE));
     let (_, keys) = get_range_entries_and_versions(db, cf, &start, &end).unwrap_or_default();
     Ok(keys)
+}
+
+/// Get the approximate number of keys in the range.
+pub fn get_region_approximate_keys_raw(db: &DB, region: &Region) -> Result<u64> {
+    let cf = keys::get_cf_from_encoded_region(&region);
+    Ok(get_region_approximate_keys_cf(db, &cf, &region)?)
 }
 
 pub fn get_region_approximate_keys_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
@@ -380,7 +387,7 @@ mod tests {
 
         let mut region = Region::new();
         region.mut_peers().push(Peer::new());
-        let range_keys = get_region_approximate_keys(&db, &region).unwrap();
+        let range_keys = get_region_approximate_keys_txn(&db, &region).unwrap();
         assert_eq!(range_keys, cases.len() as u64);
     }
 }
