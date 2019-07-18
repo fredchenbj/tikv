@@ -12,7 +12,7 @@ pub fn dump(engine: &Arc<DB>) -> Result<String, FromUtf8Error> {
     let mut s = Vec::with_capacity(1024);
     // common rocksdb stats.
     for name in engine.cf_names() {
-        let handler = engine.cf_handle(name).unwrap();
+        let handler = engine.cf_handle(name.as_str()).unwrap();
         if let Some(v) = engine.get_property_value_cf(handler, ROCKSDB_CF_STATS_KEY) {
             s.extend_from_slice(v.as_bytes());
         }

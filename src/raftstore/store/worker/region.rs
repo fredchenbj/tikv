@@ -22,13 +22,16 @@ use crate::raftstore::store::peer_storage::{
     JOB_STATUS_PENDING, JOB_STATUS_RUNNING,
 };
 use crate::raftstore::store::snap::{plain_file_used, Error, Result, SNAPSHOT_CFS};
-use crate::raftstore::store::{
-    self, check_abort, keys, ApplyOptions, SnapEntry, SnapKey, SnapManager,
-};
+use crate::raftstore::store::{self, check_abort, ApplyOptions, SnapEntry, SnapKey, SnapManager};
 use tikv_util::threadpool::{DefaultContext, ThreadPool, ThreadPoolBuilder};
 use tikv_util::time;
 use tikv_util::timer::Timer;
 use tikv_util::worker::{Runnable, RunnableWithTimer};
+
+use crate::raftstore::store::keys::{
+    self, enc_end_key, enc_end_key2, enc_start_key, enc_start_key2, get_cf_from_region,
+    is_raw_region,
+};
 
 use super::metrics::*;
 
@@ -285,8 +288,18 @@ impl SnapContext {
 
         // clear up origin data.
         let region = region_state.get_region().clone();
-        let start_key = keys::enc_start_key(&region);
-        let end_key = keys::enc_end_key(&region);
+        let start_key: Vec<u8>;
+        let end_key: Vec<u8>;
+        let raw_cf = String::from_utf8(get_cf_from_region(&region)).unwrap();
+        let is_raw = is_raw_region(&region);
+
+        if is_raw {
+            start_key = enc_start_key2(&region);
+            end_key = enc_end_key2(&region);
+        } else {
+            start_key = enc_start_key(&region);
+            end_key = enc_end_key(&region);
+        }
         check_abort(&abort)?;
         self.cleanup_overlap_ranges(&start_key, &end_key);
         box_try!(engine_util::delete_all_in_range(
@@ -310,7 +323,7 @@ impl SnapContext {
             };
         let term = apply_state.get_truncated_state().get_term();
         let idx = apply_state.get_truncated_state().get_index();
-        let snap_key = SnapKey::new(region_id, term, idx);
+        let snap_key = SnapKey::new2(region_id, term, idx, raw_cf);
         self.mgr.register(snap_key.clone(), SnapEntry::Applying);
         defer!({
             self.mgr.deregister(&snap_key, &SnapEntry::Applying);
@@ -783,7 +796,7 @@ mod tests {
         .unwrap();
 
         for cf_name in engine.kv.cf_names() {
-            let cf = engine.kv.cf_handle(cf_name).unwrap();
+            let cf = engine.kv.cf_handle(cf_name.as_str()).unwrap();
             for i in 0..6 {
                 engine.kv.put_cf(cf, &[i], &[i]).unwrap();
                 engine.kv.put_cf(cf, &[i + 1], &[i + 1]).unwrap();

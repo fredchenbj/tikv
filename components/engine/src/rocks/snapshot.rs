@@ -32,11 +32,11 @@ impl Snapshot {
         SyncSnapshot(Arc::new(self))
     }
 
-    pub fn cf_names(&self) -> Vec<&str> {
+    pub fn cf_names(&self) -> Vec<String> {
         self.db.cf_names()
     }
 
-    pub fn cf_handle(&self, cf: &str) -> Result<&CFHandle> {
+    pub fn cf_handle(&self, cf: &str) -> Result<CFHandle> {
         super::util::get_cf_handle(&self.db, cf).map_err(Error::from)
     }
 

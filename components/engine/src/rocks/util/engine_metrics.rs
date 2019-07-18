@@ -890,6 +890,7 @@ pub fn flush_engine_histogram_metrics(t: HistType, value: HistogramData, name: &
 
 pub fn flush_engine_properties(engine: &DB, name: &str, shared_block_cache: bool) {
     for cf in engine.cf_names() {
+        let cf = cf.as_str();
         let handle = rocks::util::get_cf_handle(engine, cf).unwrap();
         // It is important to monitor each cf's size, especially the "raft" and "lock" column
         // families.

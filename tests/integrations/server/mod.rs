@@ -119,7 +119,11 @@ trait MockKvService {
     unary_call!(raw_put, RawPutRequest, RawPutResponse);
     unary_call!(raw_batch_put, RawBatchPutRequest, RawBatchPutResponse);
     unary_call!(raw_update, RawUpdateRequest, RawUpdateResponse);
-    unary_call!(raw_batch_update, RawBatchUpdateRequest, RawBatchUpdateResponse);
+    unary_call!(
+        raw_batch_update,
+        RawBatchUpdateRequest,
+        RawBatchUpdateResponse
+    );
     unary_call!(raw_delete, RawDeleteRequest, RawDeleteResponse);
     unary_call!(
         raw_batch_delete,
@@ -186,7 +190,11 @@ impl<T: MockKvService + Clone + Send + 'static> Tikv for MockKv<T> {
     unary_call_dispatch!(raw_put, RawPutRequest, RawPutResponse);
     unary_call_dispatch!(raw_batch_put, RawBatchPutRequest, RawBatchPutResponse);
     unary_call_dispatch!(raw_update, RawUpdateRequest, RawUpdateResponse);
-    unary_call_dispatch!(raw_batch_update, RawBatchUpdateRequest, RawBatchUpdateResponse);
+    unary_call_dispatch!(
+        raw_batch_update,
+        RawBatchUpdateRequest,
+        RawBatchUpdateResponse
+    );
     unary_call_dispatch!(raw_delete, RawDeleteRequest, RawDeleteResponse);
     unary_call_dispatch!(
         raw_batch_delete,

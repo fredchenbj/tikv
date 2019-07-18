@@ -1213,6 +1213,7 @@ impl<E: Engine> Storage<E> {
         cf: String,
         key: Vec<u8>,
     ) -> impl Future<Item = Option<Vec<u8>>, Error = Error> {
+        info!("enter async raw get");
         const CMD: &str = "raw_get";
         let priority = readpool::Priority::from(ctx.get_priority());
 
@@ -1224,15 +1225,9 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let cf = match Self::rawkv_cf(&cf) {
-                                Ok(x) => x,
-                                Err(e) => return future::err(e),
-                            };
-                            // no scan_count for this kind of op.
-
                             let key_len = key.len();
                             let result = snapshot
-                                .get_cf(cf, &Key::from_encoded(key))
+                                .get_cf(&cf, &Key::from_encoded(key))
                                 // map storage::engine::Error -> storage::Error
                                 .map_err(Error::from)
                                 .map(|r| {
@@ -1267,6 +1262,7 @@ impl<E: Engine> Storage<E> {
         cf: String,
         keys: Vec<Vec<u8>>,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
+        info!("enter async raw batch get");
         const CMD: &str = "raw_batch_get";
         let priority = readpool::Priority::from(ctx.get_priority());
 
@@ -1279,16 +1275,16 @@ impl<E: Engine> Storage<E> {
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
                             let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
-                            let cf = match Self::rawkv_cf(&cf) {
-                                Ok(x) => x,
-                                Err(e) => return future::err(e),
-                            };
+                            //let cf = match Self::rawkv_cf(&cf) {
+                            //  Ok(x) => x,
+                            //  Err(e) => return future::err(e),
+                            //};
                             // no scan_count for this kind of op.
                             let mut stats = Statistics::default();
                             let result: Vec<Result<KvPair>> = keys
                                 .into_iter()
                                 .map(|k| {
-                                    let v = snapshot.get_cf(cf, &k);
+                                    let v = snapshot.get_cf(&cf, &k);
                                     (k, v)
                                 })
                                 .filter(|&(_, ref v)| !(v.is_ok() && v.as_ref().unwrap().is_none()))
@@ -1334,6 +1330,7 @@ impl<E: Engine> Storage<E> {
             callback(Err(Error::KeyTooLarge(key.len(), self.max_key_size)));
             return Ok(());
         }
+        info!("cf: {:?}, key: {:?}", cf, key);
         self.engine.async_write(
             &ctx,
             vec![Modify::Put(

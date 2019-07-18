@@ -46,9 +46,9 @@ impl ImportModeSwitcher {
         import_db_options.set_options(db)?;
         let import_cf_options = ImportModeCFOptions::new();
         for cf_name in db.cf_names() {
-            let cf_opts = ImportModeCFOptions::new_options(db, cf_name);
+            let cf_opts = ImportModeCFOptions::new_options(db, cf_name.as_str());
             self.backup_cf_options.push((cf_name.to_owned(), cf_opts));
-            import_cf_options.set_options(db, cf_name)?;
+            import_cf_options.set_options(db, cf_name.as_str())?;
         }
 
         self.mode = SwitchMode::Import;
@@ -176,7 +176,7 @@ mod tests {
         );
 
         for cf_name in db.cf_names() {
-            let cf = db.cf_handle(cf_name).unwrap();
+            let cf = db.cf_handle(cf_name.as_str()).unwrap();
             let cf_opts = db.get_options_cf(cf);
             assert_eq!(
                 cf_opts.get_block_cache_capacity(),
