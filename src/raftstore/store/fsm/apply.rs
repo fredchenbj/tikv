@@ -12,6 +12,7 @@ use std::{cmp, usize};
 
 use crossbeam::channel::{TryRecvError, TrySendError};
 use engine::rocks;
+use engine::rocks::util::config;
 use engine::rocks::Writable;
 use engine::rocks::{Snapshot, WriteBatch, WriteOptions};
 use engine::Engines;
@@ -31,7 +32,6 @@ use raft::eraftpb::{ConfChange, ConfChangeType, Entry, EntryType, Snapshot as Ra
 use raft::NO_LIMIT;
 use uuid::Uuid;
 
-use crate::config;
 use crate::import::SSTImporter;
 use crate::raftstore::coprocessor::CoprocessorHost;
 use crate::raftstore::store::fsm::{RaftPollerBuilder, RaftRouter};

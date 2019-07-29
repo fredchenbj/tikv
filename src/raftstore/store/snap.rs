@@ -23,6 +23,7 @@ use engine::rocks::{
 };
 use engine::Iterable;
 use engine::{CfName, CF_DEFAULT, CF_LOCK, CF_WRITE};
+use engine::rocks::util::config;
 use kvproto::metapb::Region;
 use kvproto::raft_serverpb::RaftSnapshotData;
 use kvproto::raft_serverpb::{SnapshotCFFile, SnapshotMeta};
@@ -30,7 +31,6 @@ use protobuf::Message;
 use protobuf::RepeatedField;
 use raft::eraftpb::Snapshot as RaftSnapshot;
 
-use crate::config;
 use crate::raftstore::errors::Error as RaftStoreError;
 use crate::raftstore::store::keys::{
     self, enc_end_key, enc_end_key2, enc_start_key, enc_start_key2, get_cf_from_region,
