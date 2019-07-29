@@ -232,6 +232,7 @@ pub fn new_engine_opt(
     let mut cfs_v: Vec<&str> = Vec::new();
     let mut cfs_opts_v: Vec<ColumnFamilyOptions> = Vec::new();
     for cf in &existed {
+        info!("existed cf: {}", cf);
         cfs_v.push(cf);
         match cfs_opts.iter().find(|x| x.cf == *cf) {
             Some(x) => {
