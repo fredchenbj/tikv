@@ -249,12 +249,12 @@ pub fn new_engine_opt(
 
     // Drops discarded column families.
     //    for cf in existed.iter().filter(|x| needed.iter().find(|y| y == x).is_none()) {
-    for cf in cfs_diff(&existed, &needed) {
-        // Never drop default column families.
-        if cf != CF_DEFAULT {
-            db.drop_cf(cf)?;
-        }
-    }
+//    for cf in cfs_diff(&existed, &needed) {
+//        // Never drop default column families.
+//        if cf != CF_DEFAULT {
+//            db.drop_cf(cf)?;
+//        }
+//    }
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
