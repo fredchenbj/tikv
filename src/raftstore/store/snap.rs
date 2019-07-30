@@ -1369,6 +1369,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
+        info!("building snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1380,6 +1381,7 @@ impl SnapManager {
             Arc::clone(&core.snap_size),
             Box::new(self.clone()),
         )?;
+        info!("sending snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 
@@ -1399,6 +1401,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
+        info!("receiving snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1415,6 +1418,7 @@ impl SnapManager {
                 format!("snapshot of {:?} not exists.", key).to_string(),
             )));
         }
+        info!("applying snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 
