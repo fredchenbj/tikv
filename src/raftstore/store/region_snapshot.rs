@@ -197,9 +197,9 @@ fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
     let region_end_key = keys::enc_end_key(region);
     if iter_opt.upper_bound().is_some() && !iter_opt.upper_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_upper_bound_prefix(keys::DATA_PREFIX_KEY);
-        if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
-            iter_opt.set_vec_upper_bound(region_end_key);
-        }
+//        if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
+//            iter_opt.set_vec_upper_bound(region_end_key);
+//        }
     } else {
         iter_opt.set_vec_upper_bound(region_end_key);
     }
@@ -228,10 +228,14 @@ impl RegionIterator {
         mut iter_opt: IterOption,
         cf: &str,
     ) -> RegionIterator {
+        info!("region start key: {:?}", region.get_start_key());
+        info!("region end key: {:?}", region.get_end_key());
         update_lower_bound(&mut iter_opt, &region);
         update_upper_bound(&mut iter_opt, &region);
         let start_key = iter_opt.lower_bound().unwrap().to_vec();
+        info!("start key: {:?}", start_key);
         let end_key = iter_opt.upper_bound().unwrap().to_vec();
+        info!("end key: {:?}", end_key);
         let iter = snap.db_iterator_cf(cf, iter_opt).unwrap();
         RegionIterator {
             iter,
@@ -274,8 +278,10 @@ impl RegionIterator {
     }
 
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
+        info!("enter seek for key: {:?}", key);
         self.should_seekable(key)?;
-        let key = keys::data_key(key);
+        let key = keys::get_key2(key);
+        info!("new key: {:?}", key);
         if key == self.end_key {
             self.valid = false;
         } else {
@@ -287,7 +293,7 @@ impl RegionIterator {
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        let key = keys::data_key(key);
+        let key = keys::get_key2(key);
         self.valid = self.iter.seek_for_prev(key.as_slice().into());
         if self.valid && self.iter.key() == self.end_key.as_slice() {
             self.valid = self.iter.prev();

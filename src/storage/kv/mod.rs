@@ -112,7 +112,7 @@ pub trait Snapshot: Send + Clone {
     fn iter(&self, iter_opt: IterOption, mode: ScanMode) -> Result<Cursor<Self::Iter>>;
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> Result<Cursor<Self::Iter>>;
@@ -290,7 +290,7 @@ impl Statistics {
             CF_DEFAULT => &mut self.data,
             CF_LOCK => &mut self.lock,
             CF_WRITE => &mut self.write,
-            _ => unreachable!(),
+            _ => &mut self.data,
         }
     }
 }
@@ -354,6 +354,7 @@ impl<I: Iterator> Cursor<I> {
     }
 
     pub fn seek(&mut self, key: &Key, statistics: &mut CFStatistics) -> Result<bool> {
+        info!("enter seek");
         assert_ne!(self.scan_mode, ScanMode::Backward);
         if self
             .max_key
@@ -370,6 +371,8 @@ impl<I: Iterator> Cursor<I> {
         {
             return Ok(true);
         }
+
+        info!("before internal seek");
 
         if !self.internal_seek(key, statistics)? {
             self.max_key = Some(key.as_encoded().to_owned());

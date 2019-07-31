@@ -230,7 +230,7 @@ impl Snapshot for BTreeEngineSnapshot {
     #[inline]
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> EngineResult<Cursor<Self::Iter>> {

@@ -447,7 +447,7 @@ mod tests {
         }
         fn iter_cf(
             &self,
-            _: CfName,
+            _: &str,
             _: IterOption,
             _: ScanMode,
         ) -> EngineResult<Cursor<Self::Iter>> {
