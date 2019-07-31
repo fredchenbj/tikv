@@ -23,6 +23,7 @@ use kvproto::kvrpcpb::{CommandPri, Context, KeyRange, LockInfo};
 
 use crate::server::readpool::{self, Builder as ReadPoolBuilder, ReadPool};
 use crate::server::ServerRaftStoreRouter;
+use crate::raftstore::store::keys;
 use tikv_util::collections::HashMap;
 
 use self::gc_worker::GCWorker;
@@ -1516,11 +1517,13 @@ impl<E: Engine> Storage<E> {
         statistics: &mut Statistics,
         key_only: bool,
     ) -> Result<Vec<Result<KvPair>>> {
+        info!("enter raw scan");
         let mut option = IterOption::default();
         if let Some(end) = end_key {
             option.set_upper_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
         }
-        let mut cursor = snapshot.iter_cf(Self::rawkv_cf(cf)?, option, ScanMode::Forward)?;
+        let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
+        info!("iter_cf after");
         let statistics = statistics.mut_cf_statistics(cf);
         if !cursor.seek(start_key, statistics)? {
             return Ok(vec![]);
@@ -1558,7 +1561,7 @@ impl<E: Engine> Storage<E> {
         if let Some(end) = end_key {
             option.set_lower_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
         }
-        let mut cursor = snapshot.iter_cf(Self::rawkv_cf(cf)?, option, ScanMode::Backward)?;
+        let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Backward)?;
         let statistics = statistics.mut_cf_statistics(cf);
         if !cursor.reverse_seek(start_key, statistics)? {
             return Ok(vec![]);
@@ -1591,15 +1594,20 @@ impl<E: Engine> Storage<E> {
     pub fn async_raw_scan(
         &self,
         ctx: Context,
-        cf: String,
+        _cf: String,
         key: Vec<u8>,
         end_key: Option<Vec<u8>>,
         limit: usize,
         key_only: bool,
         reverse: bool,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
+        info!("enter async raw scan");
+
         const CMD: &str = "raw_scan";
         let priority = readpool::Priority::from(ctx.get_priority());
+        let cf = String::from_utf8(keys::get_cf_from_key(&key)).unwrap();
+
+        info!("scan cf: {}", cf);
 
         let res = self.read_pool.spawn_handle(priority, move || {
             tls_collect_command_count(CMD, priority);
@@ -1635,6 +1643,7 @@ impl<E: Engine> Storage<E> {
                                 )
                                 .map_err(Error::from)
                             };
+                            info!("after raw_scan");
 
                             tls_collect_read_flow(ctx.get_region_id(), &statistics);
                             tls_collect_key_reads(
@@ -1651,6 +1660,7 @@ impl<E: Engine> Storage<E> {
                     })
             })
         });
+        info!("after readpool");
 
         future::result(res)
             .map_err(|_| Error::SchedTooBusy)
@@ -1697,12 +1707,13 @@ impl<E: Engine> Storage<E> {
     pub fn async_raw_batch_scan(
         &self,
         ctx: Context,
-        cf: String,
+        _cf: String,
         mut ranges: Vec<KeyRange>,
         each_limit: usize,
         key_only: bool,
         reverse: bool,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
+        info!("enter async raw batch scan");
         const CMD: &str = "raw_batch_scan";
         let priority = readpool::Priority::from(ctx.get_priority());
 
@@ -1721,7 +1732,9 @@ impl<E: Engine> Storage<E> {
                             let mut result = Vec::new();
                             let ranges_len = ranges.len();
                             for i in 0..ranges_len {
-                                let start_key = Key::from_encoded(ranges[i].take_start_key());
+                                let start_key = ranges[i].take_start_key();
+                                let cf = String::from_utf8(keys::get_cf_from_key(&start_key)).unwrap();
+                                let start_key = Key::from_encoded(start_key);
                                 let end_key = ranges[i].take_end_key();
                                 let end_key = if end_key.is_empty() {
                                     if i + 1 == ranges_len {
@@ -1732,6 +1745,7 @@ impl<E: Engine> Storage<E> {
                                 } else {
                                     Some(Key::from_encoded(end_key))
                                 };
+
                                 let pairs = if reverse {
                                     match Self::reverse_raw_scan(
                                         &snapshot,

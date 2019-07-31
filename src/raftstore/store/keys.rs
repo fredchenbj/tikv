@@ -216,7 +216,7 @@ pub fn is_raw_key(key: &[u8]) -> bool {
 }
 
 /// return (cf, key), default cf is "default"
-pub fn get_cf_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
+pub fn get_cf_and_key_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let mut index = 0;
     let split = ':' as u8;
     for &e in key.iter() {
@@ -234,8 +234,29 @@ pub fn get_cf_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
     let (first, second) = key.split_at(index);
     v1.extend_from_slice(&first[1..]);
     v2.extend_from_slice(&first[0..1]);
-    v2.extend_from_slice(&second[1..]);
+    if key.len() - index > 1 {
+        v2.extend_from_slice(&second[1..]);
+    }
     (v1, v2)
+}
+
+pub fn get_cf_from_key(key: &[u8]) -> Vec<u8> {
+    let mut index = 0;
+    let split = ':' as u8;
+    for &e in key.iter() {
+        if e == split {
+            break;
+        }
+        index = index + 1;
+    }
+    if index == key.len() {
+        return String::from("default").into_bytes();
+    }
+
+    let mut v1 = Vec::with_capacity(index - 1);
+    let (first, _) = key.split_at(index);
+    v1.extend_from_slice(&first[1..]);
+    v1
 }
 
 pub fn origin_key(key: &[u8]) -> &[u8] {
@@ -255,8 +276,7 @@ pub fn is_raw_region(region: &Region) -> bool {
 /// get the `cf` of the current region
 pub fn get_cf_from_region(region: &Region) -> Vec<u8> {
     assert!(!region.get_peers().is_empty());
-    let (cf, _) = get_cf_from_key(region.get_start_key());
-    cf
+    get_cf_from_key(region.get_start_key())
 }
 
 /// Get the `start_key` of current region in encoded form.
@@ -272,7 +292,7 @@ pub fn enc_start_key2(region: &Region) -> Vec<u8> {
     // only initialized region's start_key can be encoded, otherwise there must be bugs
     // somewhere.
     assert!(!region.get_peers().is_empty());
-    let (_, key) = get_cf_from_key(region.get_start_key());
+    let (_, key) = get_cf_and_key_from_key(region.get_start_key());
     data_key(&key)
 }
 
@@ -306,9 +326,36 @@ pub fn data_end_key2(region_end_key: &[u8]) -> Vec<u8> {
     if region_end_key.is_empty() {
         DATA_MAX_KEY.to_vec()
     } else {
-        let (_, key) = get_cf_from_key(region_end_key);
+        let key= get_key_from_key(region_end_key);
         data_key(&key)
     }
+}
+
+pub fn get_key_from_key(key: &[u8]) -> Vec<u8> {
+    let mut index = 0;
+    let split = ':' as u8;
+    for &e in key.iter() {
+        if e == split {
+            break;
+        }
+        index = index + 1;
+    }
+    let mut shardkey: u8 = key[0];
+    if index == key.len() {
+        if key[index-1] == (';' as u8) {
+            shardkey += 1;
+        } else {
+            return key.to_owned();
+        }
+    }
+
+    let mut v2 = Vec::with_capacity(key.len() - index);
+    let (first, second) = key.split_at(index);
+    v2.extend_from_slice(&[shardkey]);
+    if key.len() - index > 1 {
+        v2.extend_from_slice(&second[1..]);
+    }
+    v2
 }
 
 #[cfg(test)]

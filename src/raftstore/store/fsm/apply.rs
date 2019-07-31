@@ -1153,7 +1153,7 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
-        let (first, key) = keys::get_cf_from_key(key);
+        let (first, key) = keys::get_cf_and_key_from_key(key);
 
         let s1 = match std::str::from_utf8(&first) {
             Ok(v) => v,
@@ -1214,7 +1214,7 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
-        let (first, key) = keys::get_cf_from_key(key);
+        let (first, key) = keys::get_cf_and_key_from_key(key);
 
         let s1 = match std::str::from_utf8(&first) {
             Ok(v) => v,
@@ -1279,7 +1279,7 @@ impl ApplyDelegate {
         // region key range has no data prefix, so we must use origin key to check.
         util::check_key_in_region(key, &self.region)?;
 
-        let (first, key) = keys::get_cf_from_key(key);
+        let (first, key) = keys::get_cf_and_key_from_key(key);
 
         let s1 = match std::str::from_utf8(&first) {
             Ok(v) => v,

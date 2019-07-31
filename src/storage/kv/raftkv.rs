@@ -398,7 +398,7 @@ impl Snapshot for RegionSnapshot {
 
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> kv::Result<Cursor<Self::Iter>> {

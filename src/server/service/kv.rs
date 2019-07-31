@@ -1921,6 +1921,7 @@ fn future_raw_scan<E: Engine>(
     } else {
         Some(req.take_end_key())
     };
+
     storage
         .async_raw_scan(
             req.take_context(),
@@ -1932,12 +1933,14 @@ fn future_raw_scan<E: Engine>(
             req.get_reverse(),
         )
         .then(|v| {
+            info!("enter raw_scan then");
             let mut resp = RawScanResponse::new();
             if let Some(err) = extract_region_error(&v) {
                 resp.set_region_error(err);
             } else {
                 resp.set_kvs(RepeatedField::from_vec(extract_kv_pairs(v)));
             }
+            info!("after raw_scan then");
             Ok(resp)
         })
 }

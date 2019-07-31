@@ -298,7 +298,7 @@ impl Snapshot for RocksSnapshot {
 
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> Result<Cursor<Self::Iter>> {

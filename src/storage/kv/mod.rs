@@ -112,7 +112,7 @@ pub trait Snapshot: Send + Clone {
     fn iter(&self, iter_opt: IterOption, mode: ScanMode) -> Result<Cursor<Self::Iter>>;
     fn iter_cf(
         &self,
-        cf: CfName,
+        cf: &str,
         iter_opt: IterOption,
         mode: ScanMode,
     ) -> Result<Cursor<Self::Iter>>;

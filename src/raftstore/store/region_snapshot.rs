@@ -182,7 +182,7 @@ pub struct RegionIterator {
 }
 
 fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_start_key = keys::enc_start_key(region);
+    let region_start_key = keys::enc_start_key2(region);
     if iter_opt.lower_bound().is_some() && !iter_opt.lower_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_lower_bound_prefix(keys::DATA_PREFIX_KEY);
         if region_start_key.as_slice() > *iter_opt.lower_bound().as_ref().unwrap() {
@@ -194,7 +194,7 @@ fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
 }
 
 fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_end_key = keys::enc_end_key(region);
+    let region_end_key = keys::enc_end_key2(region);
     if iter_opt.upper_bound().is_some() && !iter_opt.upper_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_upper_bound_prefix(keys::DATA_PREFIX_KEY);
         if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
@@ -231,7 +231,9 @@ impl RegionIterator {
         update_lower_bound(&mut iter_opt, &region);
         update_upper_bound(&mut iter_opt, &region);
         let start_key = iter_opt.lower_bound().unwrap().to_vec();
+        info!("start key: {:?}", start_key);
         let end_key = iter_opt.upper_bound().unwrap().to_vec();
+        info!("end key: {:?}", end_key);
         let iter = snap.db_iterator_cf(cf, iter_opt).unwrap();
         RegionIterator {
             iter,
