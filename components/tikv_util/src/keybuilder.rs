@@ -87,7 +87,8 @@ impl KeyBuilder {
         &self.buf.as_slice()[self.start..]
     }
 
-    /// rocksdb key -> region key
+    /// region key -> rocksdb key
+    /// add prefix
     pub fn build(mut self) -> Vec<u8> {
         if self.start == 0 {
             self.buf

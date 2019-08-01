@@ -1523,7 +1523,7 @@ impl<E: Engine> Storage<E> {
         let mut option = IterOption::default();
         if let Some(end) = end_key {
             info!("end_key: {}", end);
-            option.set_upper_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
+            option.set_upper_bound(&keys::get_key3(end.as_encoded()), DATA_KEY_PREFIX_LEN);
         }
         let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
         info!("iter_cf after");

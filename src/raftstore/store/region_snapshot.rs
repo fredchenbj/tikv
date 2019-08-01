@@ -197,9 +197,9 @@ fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
     let region_end_key = keys::enc_end_key(region);
     if iter_opt.upper_bound().is_some() && !iter_opt.upper_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_upper_bound_prefix(keys::DATA_PREFIX_KEY);
-        if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
-            iter_opt.set_vec_upper_bound(region_end_key);
-        }
+//        if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
+//            iter_opt.set_vec_upper_bound(region_end_key);
+//        }
     } else {
         iter_opt.set_vec_upper_bound(region_end_key);
     }
