@@ -1533,6 +1533,7 @@ impl<E: Engine> Storage<E> {
         }
         let mut pairs = vec![];
         while cursor.valid()? && pairs.len() < limit {
+            info!("enter while");
             pairs.push(Ok((
                 cursor.key(statistics).to_owned(),
                 if key_only {

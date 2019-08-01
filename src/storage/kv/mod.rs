@@ -354,6 +354,7 @@ impl<I: Iterator> Cursor<I> {
     }
 
     pub fn seek(&mut self, key: &Key, statistics: &mut CFStatistics) -> Result<bool> {
+        info!("enter seek");
         assert_ne!(self.scan_mode, ScanMode::Backward);
         if self
             .max_key
@@ -370,6 +371,8 @@ impl<I: Iterator> Cursor<I> {
         {
             return Ok(true);
         }
+
+        info!("before internal seek");
 
         if !self.internal_seek(key, statistics)? {
             self.max_key = Some(key.as_encoded().to_owned());
