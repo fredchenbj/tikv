@@ -290,7 +290,7 @@ impl Statistics {
             CF_DEFAULT => &mut self.data,
             CF_LOCK => &mut self.lock,
             CF_WRITE => &mut self.write,
-            _ => unreachable!(),
+            _ => {info!("unreachable"); unreachable!()},
         }
     }
 }

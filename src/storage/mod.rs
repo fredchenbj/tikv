@@ -1528,6 +1528,7 @@ impl<E: Engine> Storage<E> {
         let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
         info!("iter_cf after");
         let statistics = statistics.mut_cf_statistics(cf);
+        info!("after statistics");
         if !cursor.seek(start_key, statistics)? {
             return Ok(vec![]);
         }
