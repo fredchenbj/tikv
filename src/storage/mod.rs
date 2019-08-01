@@ -1518,7 +1518,7 @@ impl<E: Engine> Storage<E> {
         key_only: bool,
     ) -> Result<Vec<Result<KvPair>>> {
         info!("enter raw scan");
-        info!("start_key: {}", start_key);
+        info!("start_key: {}", start_key);ZZ
 
         let mut option = IterOption::default();
         if let Some(end) = end_key {
