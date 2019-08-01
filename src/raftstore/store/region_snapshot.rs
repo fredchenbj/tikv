@@ -182,7 +182,7 @@ pub struct RegionIterator {
 }
 
 fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_start_key = keys::enc_start_key2(region);
+    let region_start_key = keys::enc_start_key(region);
     if iter_opt.lower_bound().is_some() && !iter_opt.lower_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_lower_bound_prefix(keys::DATA_PREFIX_KEY);
         if region_start_key.as_slice() > *iter_opt.lower_bound().as_ref().unwrap() {
@@ -194,7 +194,7 @@ fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
 }
 
 fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_end_key = keys::enc_end_key2(region);
+    let region_end_key = keys::enc_end_key(region);
     if iter_opt.upper_bound().is_some() && !iter_opt.upper_bound().as_ref().unwrap().is_empty() {
         iter_opt.set_upper_bound_prefix(keys::DATA_PREFIX_KEY);
         if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
@@ -279,7 +279,7 @@ impl RegionIterator {
 
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        let key = keys::data_key(key);
+        let key = keys::get_key2(key);
         if key == self.end_key {
             self.valid = false;
         } else {
@@ -291,7 +291,7 @@ impl RegionIterator {
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        let key = keys::data_key(key);
+        let key = keys::get_key2(key);
         self.valid = self.iter.seek_for_prev(key.as_slice().into());
         if self.valid && self.iter.key() == self.end_key.as_slice() {
             self.valid = self.iter.prev();

@@ -1919,7 +1919,6 @@ fn future_raw_scan<E: Engine>(
     let end_key = if req.get_end_key().is_empty() {
         None
     } else {
-        info!("take end key: {:?}", req.take_end_key());
         Some(req.take_end_key())
     };
 

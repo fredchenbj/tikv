@@ -205,6 +205,25 @@ pub fn get_key(encoded_key: &[u8], index: usize) -> Vec<u8> {
     vec
 }
 
+pub fn get_key2(encoded_key: &[u8]) -> Vec<u8> {
+    let mut index = 0;
+    let split = ':' as u8;
+    let split2 = ';' as u8;
+    for &e in encoded_key.iter() {
+        if e == split || e == split2 {
+            break;
+        }
+        index = index + 1;
+    }
+    let mut vec = Vec::new();
+    vec.extend_from_slice(DATA_PREFIX_KEY);
+    vec.push(encoded_key[0]);
+    for i in (index + 1)..encoded_key.len() {
+        vec.push(encoded_key[i]);
+    }
+    vec
+}
+
 pub fn is_raw_key(key: &[u8]) -> bool {
     let split = ':' as u8;
     for &e in key.iter() {
