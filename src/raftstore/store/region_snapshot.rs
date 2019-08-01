@@ -278,8 +278,10 @@ impl RegionIterator {
     }
 
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
+        info!("enter seek for key: {:?}", key);
         self.should_seekable(key)?;
         let key = keys::get_key2(key);
+        info!("new key: {:?}", key);
         if key == self.end_key {
             self.valid = false;
         } else {
