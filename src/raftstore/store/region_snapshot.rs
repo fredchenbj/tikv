@@ -228,8 +228,8 @@ impl RegionIterator {
         mut iter_opt: IterOption,
         cf: &str,
     ) -> RegionIterator {
-        info!("region start key: {}", region.get_start_key());
-        info!("region end key: {}", region.get_end_key());
+        info!("region start key: {:?}", region.get_start_key());
+        info!("region end key: {:?}", region.get_end_key());
         update_lower_bound(&mut iter_opt, &region);
         update_upper_bound(&mut iter_opt, &region);
         let start_key = iter_opt.lower_bound().unwrap().to_vec();
