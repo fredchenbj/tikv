@@ -1518,8 +1518,11 @@ impl<E: Engine> Storage<E> {
         key_only: bool,
     ) -> Result<Vec<Result<KvPair>>> {
         info!("enter raw scan");
+        info!("start_key: {}", start_key);
+
         let mut option = IterOption::default();
         if let Some(end) = end_key {
+            info!("end_key: {}", end);
             option.set_upper_bound(end.as_encoded(), DATA_KEY_PREFIX_LEN);
         }
         let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
@@ -1540,6 +1543,7 @@ impl<E: Engine> Storage<E> {
             )));
             cursor.next(statistics);
         }
+        info!("after while");
         Ok(pairs)
     }
 

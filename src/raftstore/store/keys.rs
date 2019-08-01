@@ -350,7 +350,7 @@ pub fn get_key_from_key(key: &[u8]) -> Vec<u8> {
     }
 
     let mut v2 = Vec::with_capacity(key.len() - index);
-    let (first, second) = key.split_at(index);
+    let (_, second) = key.split_at(index);
     v2.extend_from_slice(&[shardkey]);
     if key.len() - index > 1 {
         v2.extend_from_slice(&second[1..]);
