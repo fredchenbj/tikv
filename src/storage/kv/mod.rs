@@ -558,7 +558,9 @@ impl<I: Iterator> Cursor<I> {
 
     #[inline]
     pub fn key(&self, statistics: &mut CFStatistics) -> &[u8] {
+        info!("enter cursor key");
         let key = self.iter.key();
+        info!("key: {:?}", key);
         if !self.mark_key_read() {
             statistics.flow_stats.read_bytes += key.len();
             statistics.flow_stats.read_keys += 1;
@@ -568,7 +570,9 @@ impl<I: Iterator> Cursor<I> {
 
     #[inline]
     pub fn value(&self, statistics: &mut CFStatistics) -> &[u8] {
+        info!("enter cursor value");
         let value = self.iter.value();
+        info!("value: {:?}", value);
         if !self.mark_value_read() {
             statistics.flow_stats.read_bytes += value.len();
         }
@@ -609,6 +613,7 @@ impl<I: Iterator> Cursor<I> {
 
     #[inline]
     pub fn next(&mut self, statistics: &mut CFStatistics) -> bool {
+        info!("enter cursor next");
         statistics.next += 1;
         self.mark_unread();
         self.iter.next()
@@ -627,6 +632,7 @@ impl<I: Iterator> Cursor<I> {
     // (2) there is an error. In this case status() is not OK().
     // So check status when iterator is invalidated.
     pub fn valid(&self) -> Result<bool> {
+        info!("enter cursor valid");
         if !self.iter.valid() {
             if let Err(e) = self.iter.status() {
                 CRITICAL_ERROR.with_label_values(&["rocksdb"]).inc();
