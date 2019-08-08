@@ -291,6 +291,7 @@ impl SnapContext {
         let start_key: Vec<u8>;
         let end_key: Vec<u8>;
         let raw_cf = String::from_utf8(get_cf_from_region(&region)).unwrap();
+        info!("cf: {}", &raw_cf);
         let is_raw = is_raw_region(&region);
 
         if is_raw {

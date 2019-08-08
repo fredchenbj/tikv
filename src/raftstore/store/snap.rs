@@ -652,6 +652,7 @@ impl Snap {
     /// add lock and distributed consistency
     fn add_cf_file(&mut self, cf: &str) {
         let filename = format!("{}_{}{}", SNAP_GEN_PREFIX, cf, SST_FILE_SUFFIX);
+        info!("filename: {}", &filename);
         let path = self.dir_path.join(&filename);
         let tmp_path = self
             .dir_path
@@ -686,17 +687,22 @@ impl Snap {
     }
 
     fn save_cf_files(&mut self) -> io::Result<()> {
+        info!("break0");
         for cf_file in &mut self.cf_files {
             if plain_file_used(&cf_file.cf) {
+                info!("break");
                 let _ = cf_file.file.take();
             } else if cf_file.kv_count == 0 {
+                info!("break");
                 let _ = cf_file.sst_writer.take().unwrap();
             } else {
+                info!("break");
                 let mut writer = cf_file.sst_writer.take().unwrap();
                 if let Err(e) = writer.finish() {
                     return Err(io::Error::new(ErrorKind::Other, e));
                 }
             }
+            info!("break");
             let size = get_file_size(&cf_file.tmp_path)?;
             // The size of a sst file is larger than 0 doesn't mean it contains some key value pairs.
             // For example, if we provide a encrypted env to the SstFileWriter, RocksDB will append
@@ -781,6 +787,8 @@ impl Snap {
             cfs = CFS;
         }
 
+        info!("break point");
+
         for cf in cfs {
             if let Err(_) = self.switch_to_cf_file(cf) {
                 self.add_cf_file(cf);
@@ -830,11 +838,13 @@ impl Snap {
         }
 
         self.save_cf_files()?;
+        info!("break2");
         stat.kv_count = snap_key_count;
         // save snapshot meta to meta file
         self.meta_file.meta = gen_snapshot_meta(&self.cf_files[..])?;
+        info!("break3");
         self.save_meta_file()?;
-
+        info!("break4");
         Ok(())
     }
 

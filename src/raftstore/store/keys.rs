@@ -248,8 +248,9 @@ pub fn get_key3(encoded_key: &[u8]) -> Vec<u8> {
 
 pub fn is_raw_key(key: &[u8]) -> bool {
     let split = ':' as u8;
+    let split2 = ';' as u8;
     for &e in key.iter() {
-        if e == split {
+        if e == split || e == split2 {
             return true;
         }
     }
@@ -258,10 +259,14 @@ pub fn is_raw_key(key: &[u8]) -> bool {
 
 /// return (cf, key), default cf is "default"
 pub fn get_cf_and_key_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
+    if key.len() == 0 {
+        return (Vec::new(), Vec::new())
+    }
     let mut index = 0;
     let split = ':' as u8;
+    let split2 = ';' as u8;
     for &e in key.iter() {
-        if e == split {
+        if e == split || e == split2 {
             break;
         }
         index = index + 1;
@@ -284,8 +289,9 @@ pub fn get_cf_and_key_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
 pub fn get_cf_from_key(key: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let split = ':' as u8;
+    let split2 = ';' as u8;
     for &e in key.iter() {
-        if e == split {
+        if e == split || e == split2 {
             break;
         }
         index = index + 1;
@@ -311,13 +317,29 @@ pub fn origin_key(key: &[u8]) -> &[u8] {
 
 /// is old region or not
 pub fn is_raw_region(region: &Region) -> bool {
-    is_raw_key(region.get_start_key())
+    let start_key = region.get_start_key();
+    let end_key = region.get_end_key();
+    if start_key.len() != 0 {
+        info!("start_key");
+        is_raw_key(start_key)
+    } else {
+        info!("end_key");
+        is_raw_key(end_key)
+    }
 }
 
 /// get the `cf` of the current region
 pub fn get_cf_from_region(region: &Region) -> Vec<u8> {
     assert!(!region.get_peers().is_empty());
-    get_cf_from_key(region.get_start_key())
+    let start_key = region.get_start_key();
+    let end_key = region.get_end_key();
+    if start_key.len() != 0 {
+        info!("start_key");
+        get_cf_from_key(start_key)
+    } else {
+        info!("end_key");
+        get_cf_from_key(end_key)
+    }
 }
 
 /// Get the `start_key` of current region in encoded form.
@@ -333,8 +355,18 @@ pub fn enc_start_key2(region: &Region) -> Vec<u8> {
     // only initialized region's start_key can be encoded, otherwise there must be bugs
     // somewhere.
     assert!(!region.get_peers().is_empty());
-    let (_, key) = get_cf_and_key_from_key(region.get_start_key());
+    let key = data_start_key(region.get_start_key());
     data_key(&key)
+}
+
+#[inline]
+pub fn data_start_key(region_start_key: &[u8]) -> Vec<u8> {
+    if region_start_key.is_empty() {
+        Vec::new()
+    } else {
+        let key= get_key_from_region_key(region_start_key);
+        data_key(&key)
+    }
 }
 
 /// Get the `end_key` of current region in encoded form.
@@ -367,34 +399,30 @@ pub fn data_end_key2(region_end_key: &[u8]) -> Vec<u8> {
     if region_end_key.is_empty() {
         DATA_MAX_KEY.to_vec()
     } else {
-        let key= get_key_from_key(region_end_key);
+        let key= get_key_from_region_key(region_end_key);
         data_key(&key)
     }
 }
 
-pub fn get_key_from_key(key: &[u8]) -> Vec<u8> {
+pub fn get_key_from_region_key(key: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let split = ':' as u8;
+    let split2 = ';' as u8;
     for &e in key.iter() {
-        if e == split {
+        if e == split || e == split2 {
             break;
         }
         index = index + 1;
     }
     let mut shardkey: u8 = key[0];
-    if index == key.len() {
-        if key[index-1] == (';' as u8) {
-            shardkey += 1;
-        } else {
-            return key.to_owned();
-        }
-    }
-
-    let mut v2 = Vec::with_capacity(key.len() - index);
-    let (_, second) = key.split_at(index);
-    v2.extend_from_slice(&[shardkey]);
-    if key.len() - index > 1 {
+    let mut v2= Vec::with_capacity(key.len() - index);
+    if key[index] == split {
+        let (_, second) = key.split_at(index);
+        v2.extend_from_slice(&[shardkey]);
         v2.extend_from_slice(&second[1..]);
+    } else {
+        shardkey += 1;
+        v2.extend_from_slice(&[shardkey]);
     }
     v2
 }

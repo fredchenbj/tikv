@@ -1383,6 +1383,7 @@ pub fn do_snapshot(
         })?;
 
     let cf = get_cf_from_region(state.get_region());
+    info!("cf:{:?}", &cf);
     let key = SnapKey::new2(region_id, term, idx, String::from_utf8(cf).unwrap());
 
     mgr.register(key.clone(), SnapEntry::Generating);
