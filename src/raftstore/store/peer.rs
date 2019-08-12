@@ -1942,15 +1942,8 @@ impl Peer {
         let last_pending_read_count = self.raft_group.raft.pending_read_count();
         let last_ready_read_count = self.raft_group.raft.ready_read_count();
 
-        poll_ctx.raft_metrics.propose.read_index += 1;
-
         let id = Uuid::new_v4();
         self.raft_group.read_index(id.as_bytes().to_vec());
-        debug!("request to get a read index";
-            "request_id" => ?id,
-            "region_id" => self.region_id,
-            "peer_id" => self.peer.get_id(),
-        );
 
         let pending_read_count = self.raft_group.raft.pending_read_count();
         let ready_read_count = self.raft_group.raft.ready_read_count();

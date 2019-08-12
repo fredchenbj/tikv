@@ -3,6 +3,10 @@
 use std::sync::Arc;
 
 use fail;
+use std::mem;
+use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
+use std::thread;
 use std::time::Duration;
 use test_raftstore::*;
 use tikv_util::HandyRwLock;
@@ -63,7 +67,6 @@ fn test_wait_for_apply_index() {
         Err(_) => panic!("follower read failed"),
     }
 }
-<<<<<<< HEAD
 
 #[test]
 fn test_duplicate_read_index_ctx() {
@@ -136,5 +139,3 @@ fn test_duplicate_read_index_ctx() {
     assert!(rx2.recv_timeout(Duration::from_millis(500)).is_ok());
     assert!(rx3.recv_timeout(Duration::from_millis(500)).is_ok());
 }
-=======
->>>>>>> c759022b... Rename follower read (#5118)
