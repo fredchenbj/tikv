@@ -116,7 +116,7 @@ impl<C: CasualRouter + Send> SplitCheckObserver for KeysCheckObserver<C> {
     ) {
         let region = ctx.region();
         let region_id = region.get_id();
-        let region_keys = match get_region_approximate_keys(engine, region) {
+        let region_keys = match get_region_approximate_keys_txn(engine, region) {
             Ok(keys) => keys,
             Err(e) => {
                 warn!(
@@ -172,8 +172,9 @@ impl<C: CasualRouter + Send> SplitCheckObserver for KeysCheckObserver<C> {
 }
 
 /// Get the approximate number of keys in the range.
-pub fn get_region_approximate_keys(db: &DB, region: &Region) -> Result<u64> {
+pub fn get_region_approximate_keys_txn(db: &DB, region: &Region) -> Result<u64> {
     // try to get from RangeProperties first.
+    // here only consider about txn situation
     match get_region_approximate_keys_cf(db, CF_WRITE, region) {
         Ok(v) => {
             if v > 0 {
@@ -193,9 +194,33 @@ pub fn get_region_approximate_keys(db: &DB, region: &Region) -> Result<u64> {
     Ok(keys)
 }
 
+/// Get the approximate number of keys in the range.
+pub fn get_region_approximate_keys_raw(db: &DB, region: &Region) -> Result<u64> {
+    debug!("enter get region approximate keys");
+    match keys::get_cf_from_encoded_region(&region) {
+        Ok(cf) => Ok(get_region_approximate_keys_cf(db, &cf, &region)?),
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get cf from region error"));
+        }
+    }
+}
+
 pub fn get_region_approximate_keys_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
-    let start_key = keys::enc_start_key(region);
-    let end_key = keys::enc_end_key(region);
+    let start_key = match keys::get_start_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get start key from region error"));
+        },
+    };
+    let end_key = match keys::get_end_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get end key from region error"));
+        },
+    };
     let cf = box_try!(rocks::util::get_cf_handle(db, cfname));
     let range = Range::new(&start_key, &end_key);
     let (mut keys, _) = db.get_approximate_memtable_stats_cf(cf, &range);
@@ -380,7 +405,7 @@ mod tests {
 
         let mut region = Region::new();
         region.mut_peers().push(Peer::new());
-        let range_keys = get_region_approximate_keys(&db, &region).unwrap();
+        let range_keys = get_region_approximate_keys_txn(&db, &region).unwrap();
         assert_eq!(range_keys, cases.len() as u64);
     }
 }

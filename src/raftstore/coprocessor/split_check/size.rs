@@ -195,18 +195,65 @@ impl<C: CasualRouter + Send> SplitCheckObserver for SizeCheckObserver<C> {
 
 /// Get the approximate size of the range.
 pub fn get_region_approximate_size(db: &DB, region: &Region) -> Result<u64> {
-    let mut size = 0;
-    for cfname in LARGE_CFS {
-        size += get_region_approximate_size_cf(db, cfname, &region)?
+    debug!("enter get region approximate size");
+    match keys::get_cf_from_encoded_region(&region) {
+        Ok(cf) => Ok(get_region_approximate_size_cf(db, &cf, &region)?),
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get cf from region error"));
+        }
     }
-    Ok(size)
+}
+
+pub fn get_region_approximate_key_and_size_cf(db: &DB, cfname: &str, region: &Region) -> Result<(u64, u64)> {
+    let cf = box_try!(rocks::util::get_cf_handle(db, cfname));
+    let start_key = match keys::get_start_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get start key from region error"));
+        },
+    };
+    let end_key = match keys::get_end_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get end key from region error"));
+        },
+    };
+    let range = Range::new(&start_key, &end_key);
+    // Return the approximate number of records and size in the range of memtables of the cf.
+    let (mut keys, mut size) = db.get_approximate_memtable_stats_cf(cf, &range);
+
+    let collection = box_try!(util::get_range_properties_cf(
+        db, cfname, &start_key, &end_key
+    ));
+    for (_, v) in &*collection {
+        let props = box_try!(RangeProperties::decode(v.user_collected_properties()));
+        size += props.get_approximate_size_in_range(&start_key, &end_key);
+        keys += props.get_approximate_keys_in_range(&start_key, &end_key);
+    }
+    Ok((keys, size))
 }
 
 pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
     let cf = box_try!(rocks::util::get_cf_handle(db, cfname));
-    let start_key = keys::enc_start_key(region);
-    let end_key = keys::enc_end_key(region);
+    let start_key = match keys::get_start_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get start key from region error"));
+        },
+    };
+    let end_key = match keys::get_end_key_from_encoded_region(&region) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error: {}", err);
+            return Err(box_err!("get end key from region error"));
+        },
+    };
     let range = Range::new(&start_key, &end_key);
+    // Return the approximate number of records and size in the range of memtables of the cf.
     let (_, mut size) = db.get_approximate_memtable_stats_cf(cf, &range);
 
     let collection = box_try!(util::get_range_properties_cf(
