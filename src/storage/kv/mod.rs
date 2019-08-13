@@ -110,12 +110,8 @@ pub trait Snapshot: Send + Clone {
     fn get(&self, key: &Key) -> Result<Option<Value>>;
     fn get_cf(&self, cf: &str, key: &Key) -> Result<Option<Value>>;
     fn iter(&self, iter_opt: IterOption, mode: ScanMode) -> Result<Cursor<Self::Iter>>;
-    fn iter_cf(
-        &self,
-        cf: &str,
-        iter_opt: IterOption,
-        mode: ScanMode,
-    ) -> Result<Cursor<Self::Iter>>;
+    fn iter_cf(&self, cf: &str, iter_opt: IterOption, mode: ScanMode)
+        -> Result<Cursor<Self::Iter>>;
     fn get_properties(&self) -> Result<TablePropertiesCollection> {
         self.get_properties_cf(CF_DEFAULT)
     }

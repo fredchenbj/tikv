@@ -32,10 +32,7 @@ use protobuf::RepeatedField;
 use raft::eraftpb::Snapshot as RaftSnapshot;
 
 use crate::raftstore::errors::Error as RaftStoreError;
-use crate::raftstore::store::keys::{
-    self, enc_end_key, enc_end_key2, enc_start_key, enc_start_key2, get_cf_from_region,
-    is_raw_region,
-};
+use crate::raftstore::store::keys::{self, enc_end_key, enc_start_key, is_raw_region};
 use crate::raftstore::store::util::check_key_in_region;
 use crate::raftstore::store::{RaftRouter, StoreMsg};
 use crate::raftstore::Result as RaftStoreResult;
@@ -126,7 +123,7 @@ impl SnapKey {
     }
 
     #[inline]
-    pub fn new2(region_id: u64, term: u64, idx: u64, cf: String) -> SnapKey {
+    pub fn new_with_cf(region_id: u64, term: u64, idx: u64, cf: String) -> SnapKey {
         SnapKey {
             region_id,
             term,
@@ -142,7 +139,7 @@ impl SnapKey {
     pub fn from_region_snap(region_id: u64, snap: &RaftSnapshot, cf: String) -> SnapKey {
         let index = snap.get_metadata().get_index();
         let term = snap.get_metadata().get_term();
-        SnapKey::new2(region_id, term, index, cf)
+        SnapKey::new_with_cf(region_id, term, index, cf)
     }
 
     pub fn from_snap(snap: &RaftSnapshot) -> io::Result<SnapKey> {
@@ -152,7 +149,13 @@ impl SnapKey {
         }
 
         let region = snap_data.get_region();
-        let cf = String::from_utf8(get_cf_from_region(&region)).unwrap();
+        let cf = match keys::get_cf_from_encoded_region(&region) {
+            Ok(t) => t,
+            Err(err) => {
+                error!("error: {}", err);
+                return Err(io::Error::new(ErrorKind::Other, "from snap error"));
+            }
+        };
 
         Ok(SnapKey::from_region_snap(region.get_id(), snap, cf))
     }
@@ -768,26 +771,52 @@ impl Snap {
         }
 
         let mut snap_key_count = 0;
-        let cfs;
-        let begin_key;
-        let end_key;
         let is_raw = is_raw_region(region);
-        let raw_cf;
-        let cf_vec;
-        if is_raw {
-            begin_key = enc_start_key2(region);
-            end_key = enc_end_key2(region);
-            raw_cf = get_cf_from_region(region);
-            cf_vec = vec![str::from_utf8(&raw_cf).unwrap()];
-            cfs = cf_vec.as_slice();
-            self.cf_files.clear();
+        let (begin_key, end_key) = if is_raw {
+            let key1 = match keys::get_start_key_from_encoded_region(region) {
+                Ok(t) => t,
+                Err(err) => {
+                    error!("error {}", err);
+                    return Err(RaftStoreError::Other(From::from(
+                        "get start key from region error".to_string(),
+                    )));
+                }
+            };
+            let key2 = match keys::get_end_key_from_encoded_region(region) {
+                Ok(t) => t,
+                Err(err) => {
+                    error!("error {}", err);
+                    return Err(RaftStoreError::Other(From::from(
+                        "get end key from region error".to_string(),
+                    )));
+                }
+            };
+            (key1, key2)
         } else {
-            begin_key = enc_start_key(region);
-            end_key = enc_end_key(region);
+            (enc_start_key(region), enc_end_key(region))
+        };
+
+        let cfs;
+        let cf_vec;
+        let raw_cf;
+        if is_raw {
+            raw_cf = match keys::get_cf_from_encoded_region(region) {
+                Ok(t) => t,
+                Err(err) => {
+                    error!("error {}", err);
+                    return Err(RaftStoreError::Other(From::from(
+                        "get cf from region error".to_string(),
+                    )));
+                }
+            };
+            cf_vec = vec![raw_cf.as_str()];
+            cfs = cf_vec.as_slice();
+        //self.cf_files.clear();
+        } else {
             cfs = CFS;
         }
 
-        info!("break point");
+        debug!("break point");
 
         for cf in cfs {
             if let Err(_) = self.switch_to_cf_file(cf) {
@@ -838,13 +867,13 @@ impl Snap {
         }
 
         self.save_cf_files()?;
-        info!("break2");
+        debug!("break2");
         stat.kv_count = snap_key_count;
         // save snapshot meta to meta file
         self.meta_file.meta = gen_snapshot_meta(&self.cf_files[..])?;
-        info!("break3");
+        debug!("break3");
         self.save_meta_file()?;
-        info!("break4");
+        debug!("break4");
         Ok(())
     }
 
@@ -1379,7 +1408,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
-        info!("building snapshot: {}", key.region_id);
+        debug!("building snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1391,7 +1420,7 @@ impl SnapManager {
             Arc::clone(&core.snap_size),
             Box::new(self.clone()),
         )?;
-        info!("sending snapshot: {}", key.region_id);
+        debug!("sending snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 
@@ -1411,7 +1440,7 @@ impl SnapManager {
             Box::new(self.clone()),
             self.limiter.clone(),
         )?;
-        info!("receiving snapshot: {}", key.region_id);
+        debug!("receiving snapshot: {}", key.region_id);
         Ok(Box::new(f))
     }
 
@@ -1428,7 +1457,7 @@ impl SnapManager {
                 format!("snapshot of {:?} not exists.", key).to_string(),
             )));
         }
-        info!("applying snapshot: {}", key.region_id);
+        debug!("applying snapshot: {}", key.region_id);
         Ok(Box::new(s))
     }
 

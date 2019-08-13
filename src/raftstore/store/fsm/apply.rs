@@ -1179,12 +1179,12 @@ impl ApplyDelegate {
                             e
                         )
                     });
-                return Ok(resp)
-            },
+                return Ok(resp);
+            }
             Err(err) => {
                 error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle put error")))
-            },
+                return Err(Error::Key(String::from("handle put error")));
+            }
         }
     }
 
@@ -1223,12 +1223,12 @@ impl ApplyDelegate {
                             e
                         )
                     });
-                return Ok(resp)
-            },
+                return Ok(resp);
+            }
             Err(err) => {
                 error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle update error")))
-            },
+                return Err(Error::Key(String::from("handle update error")));
+            }
         }
     }
 
@@ -1243,7 +1243,7 @@ impl ApplyDelegate {
                 self.metrics.size_diff_hint -= key.len() as i64;
                 if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
                     error!("key: {:?} don't have cf: {}", encoded_key, cf);
-                    return Err(Error::Key(String::from("handle delete error")))
+                    return Err(Error::Key(String::from("handle delete error")));
                 }
                 rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
                     .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
@@ -1256,12 +1256,12 @@ impl ApplyDelegate {
                         )
                     });
                 self.metrics.delete_keys_hint += 1;
-                return Ok(resp)
-            },
+                return Ok(resp);
+            }
             Err(err) => {
                 error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle delete error")))
-            },
+                return Err(Error::Key(String::from("handle delete error")));
+            }
         }
     }
 

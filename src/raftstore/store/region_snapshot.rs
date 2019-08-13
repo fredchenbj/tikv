@@ -155,7 +155,7 @@ impl Peekable for RegionSnapshot {
             Err(err) => {
                 error!("{}", err);
                 Err(EngineError::RocksDb("get cf and key error".into()))
-            },
+            }
         }
     }
 }
@@ -167,31 +167,27 @@ pub struct RegionIterator {
     iter: DBIterator<Arc<DB>>,
     valid: bool,
     region: Arc<Region>,
-    start_key: Vec<u8>,  // rocksdb engine's start key
-    end_key: Vec<u8>,    // rocksdb engine's end key
+    start_key: Vec<u8>, // rocksdb engine's start key
+    end_key: Vec<u8>,   // rocksdb engine's end key
 }
 
 fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_start_key = keys::enc_start_key(region);
-    if iter_opt.lower_bound().is_some() && !iter_opt.lower_bound().as_ref().unwrap().is_empty() {
-        iter_opt.set_lower_bound_prefix(keys::DATA_PREFIX_KEY);
-        if region_start_key.as_slice() > *iter_opt.lower_bound().as_ref().unwrap() {
-            iter_opt.set_vec_lower_bound(region_start_key);
-        }
-    } else {
-        iter_opt.set_vec_lower_bound(region_start_key);
+    match keys::get_start_key_from_encoded_region(region) {
+        Ok(key) => iter_opt.set_vec_lower_bound(key),
+        Err(err) => error!("error {}", err),
     }
 }
 
 fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
-    let region_end_key = keys::enc_end_key(region);
+    let mut end_key = region.get_end_key();
     if iter_opt.upper_bound().is_some() && !iter_opt.upper_bound().as_ref().unwrap().is_empty() {
-        iter_opt.set_upper_bound_prefix(keys::DATA_PREFIX_KEY);
-//        if region_end_key.as_slice() < *iter_opt.upper_bound().as_ref().unwrap() {
-//            iter_opt.set_vec_upper_bound(region_end_key);
-//        }
-    } else {
-        iter_opt.set_vec_upper_bound(region_end_key);
+        if end_key > *iter_opt.upper_bound().as_ref().unwrap() {
+            end_key = iter_opt.upper_bound().as_ref().unwrap();
+        }
+    }
+    match keys::get_key_from_encoded_region_key(end_key) {
+        Ok(key) => iter_opt.set_vec_upper_bound(key),
+        Err(err) => error!("error {}", err),
     }
 }
 
@@ -218,14 +214,14 @@ impl RegionIterator {
         mut iter_opt: IterOption,
         cf: &str,
     ) -> RegionIterator {
-        info!("region start key: {:?}", region.get_start_key());
-        info!("region end key: {:?}", region.get_end_key());
+        debug!("region start key: {:?}", region.get_start_key());
+        debug!("region end key: {:?}", region.get_end_key());
         update_lower_bound(&mut iter_opt, &region);
         update_upper_bound(&mut iter_opt, &region);
         let start_key = iter_opt.lower_bound().unwrap().to_vec();
-        info!("start key: {:?}", start_key);
+        debug!("start key: {:?}", start_key);
         let end_key = iter_opt.upper_bound().unwrap().to_vec();
-        info!("end key: {:?}", end_key);
+        debug!("end key: {:?}", end_key);
         let iter = snap.db_iterator_cf(cf, iter_opt).unwrap();
         RegionIterator {
             iter,
@@ -280,22 +276,30 @@ impl RegionIterator {
                 }
 
                 Ok(self.update_valid(true))
-            },
+            }
             Err(err) => {
                 error!("seek key: {:?}, error: {}", key, err);
                 Err(Error::Key(String::from("seek key error")))
-            },
+            }
         }
     }
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        let key = keys::get_key2(key);
-        self.valid = self.iter.seek_for_prev(key.as_slice().into());
-        if self.valid && self.iter.key() == self.end_key.as_slice() {
-            self.valid = self.iter.prev();
+        match keys::get_key_from_encoded_region_key(key) {
+            Ok(new_key) => {
+                debug!("new key: {:?}", new_key);
+                self.valid = self.iter.seek_for_prev(new_key.as_slice().into());
+                if self.valid && self.iter.key() == self.end_key.as_slice() {
+                    self.valid = self.iter.prev();
+                }
+                Ok(self.update_valid(false))
+            }
+            Err(err) => {
+                error!("seek pre key: {:?}, error: {}", key, err);
+                Err(Error::Key(String::from("seek pre key error")))
+            }
         }
-        Ok(self.update_valid(false))
     }
 
     pub fn prev(&mut self) -> bool {
@@ -317,6 +321,7 @@ impl RegionIterator {
     }
 
     #[inline]
+    // scan get the key and value, the key is "[z]+[shardByte]+[RawKey]"
     pub fn key(&self) -> &[u8] {
         assert!(self.valid);
         keys::origin_key(self.iter.key())

@@ -34,8 +34,6 @@ use super::worker::RegionTask;
 use super::{SnapEntry, SnapKey, SnapManager, SnapshotStatistics};
 use crate::config;
 
-use crate::raftstore::store::keys::get_cf_from_region;
-
 // When we create a region peer, we should initialize its log term/index > 0,
 // so that we can force the follower peer to sync the snapshot first.
 pub const RAFT_INIT_LOG_TERM: u64 = 5;
@@ -1382,10 +1380,16 @@ pub fn do_snapshot(
             Some(state) => Ok(state),
         })?;
 
-    let cf = get_cf_from_region(state.get_region());
-    info!("cf:{:?}", &cf);
-    let key = SnapKey::new2(region_id, term, idx, String::from_utf8(cf).unwrap());
+    let cf = match keys::get_cf_from_encoded_region(state.get_region()) {
+        Ok(t) => t,
+        Err(err) => {
+            error!("error {}", err);
+            return Err(storage_error("could not get cf from region "));
+        }
+    };
+    debug!("do snapshot cf: {}", &cf);
 
+    let key = SnapKey::new_with_cf(region_id, term, idx, cf);
     mgr.register(key.clone(), SnapEntry::Generating);
     defer!(mgr.deregister(&key, &SnapEntry::Generating));
 

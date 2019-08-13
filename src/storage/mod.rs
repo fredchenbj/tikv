@@ -21,9 +21,9 @@ use futures::{future, Future};
 use kvproto::errorpb;
 use kvproto::kvrpcpb::{CommandPri, Context, KeyRange, LockInfo};
 
+use crate::raftstore::store::keys;
 use crate::server::readpool::{self, Builder as ReadPoolBuilder, ReadPool};
 use crate::server::ServerRaftStoreRouter;
-use crate::raftstore::store::keys;
 use tikv_util::collections::HashMap;
 
 use self::gc_worker::GCWorker;
@@ -1517,24 +1517,23 @@ impl<E: Engine> Storage<E> {
         statistics: &mut Statistics,
         key_only: bool,
     ) -> Result<Vec<Result<KvPair>>> {
-        info!("enter raw scan");
-        info!("start_key: {}", start_key);
+        debug!("enter raw scan");
+        debug!("start_key: {}", start_key);
 
         let mut option = IterOption::default();
+        // here set end_key is to compare with region_end_key, get the min one
         if let Some(end) = end_key {
-            info!("end_key: {}", end);
-            option.set_upper_bound(&keys::get_key3(end.as_encoded()), DATA_KEY_PREFIX_LEN);
+            debug!("request end_key: {}", end);
+            option.set_upper_bound(end.as_encoded(), 0);
         }
         let mut cursor = snapshot.iter_cf(cf, option, ScanMode::Forward)?;
-        info!("iter_cf after");
         let statistics = statistics.mut_cf_statistics(cf);
-        info!("after statistics");
         if !cursor.seek(start_key, statistics)? {
             return Ok(vec![]);
         }
         let mut pairs = vec![];
         while cursor.valid()? && pairs.len() < limit {
-            info!("enter while");
+            debug!("enter while");
             pairs.push(Ok((
                 cursor.key(statistics).to_owned(),
                 if key_only {
@@ -1545,7 +1544,7 @@ impl<E: Engine> Storage<E> {
             )));
             cursor.next(statistics);
         }
-        info!("after while");
+        debug!("after while");
         Ok(pairs)
     }
 
@@ -1607,13 +1606,10 @@ impl<E: Engine> Storage<E> {
         key_only: bool,
         reverse: bool,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
-        info!("enter async raw scan");
+        debug!("enter async raw scan");
 
         const CMD: &str = "raw_scan";
         let priority = readpool::Priority::from(ctx.get_priority());
-        let cf = String::from_utf8(keys::get_cf_from_key(&key)).unwrap();
-
-        info!("scan cf: {}", cf);
 
         let res = self.read_pool.spawn_handle(priority, move || {
             tls_collect_command_count(CMD, priority);
@@ -1623,8 +1619,16 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let end_key = end_key.map(Key::from_encoded);
+                            let cf = match keys::get_cf_from_encoded_region_key(&key) {
+                                Ok(t) => t,
+                                Err(err) => {
+                                    error!("error: {}", err);
+                                    return future::err(Error::InvalidCf(String::from("scanCf")));
+                                }
+                            };
+                            debug!("scan cf: {}", cf);
 
+                            let end_key = end_key.map(Key::from_encoded);
                             let mut statistics = Statistics::default();
                             let result = if reverse {
                                 Self::reverse_raw_scan(
@@ -1649,7 +1653,6 @@ impl<E: Engine> Storage<E> {
                                 )
                                 .map_err(Error::from)
                             };
-                            info!("after raw_scan");
 
                             tls_collect_read_flow(ctx.get_region_id(), &statistics);
                             tls_collect_key_reads(
@@ -1666,7 +1669,6 @@ impl<E: Engine> Storage<E> {
                     })
             })
         });
-        info!("after readpool");
 
         future::result(res)
             .map_err(|_| Error::SchedTooBusy)
@@ -1719,7 +1721,7 @@ impl<E: Engine> Storage<E> {
         key_only: bool,
         reverse: bool,
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
-        info!("enter async raw batch scan");
+        debug!("enter async raw batch scan");
         const CMD: &str = "raw_batch_scan";
         let priority = readpool::Priority::from(ctx.get_priority());
 
@@ -1739,7 +1741,15 @@ impl<E: Engine> Storage<E> {
                             let ranges_len = ranges.len();
                             for i in 0..ranges_len {
                                 let start_key = ranges[i].take_start_key();
-                                let cf = String::from_utf8(keys::get_cf_from_key(&start_key)).unwrap();
+                                let cf = match keys::get_cf_from_encoded_region_key(&start_key) {
+                                    Ok(t) => t,
+                                    Err(err) => {
+                                        error!("error: {}", err);
+                                        return future::err(Error::InvalidCf(String::from(
+                                            "batchScanCf",
+                                        )));
+                                    }
+                                };
                                 let start_key = Key::from_encoded(start_key);
                                 let end_key = ranges[i].take_end_key();
                                 let end_key = if end_key.is_empty() {

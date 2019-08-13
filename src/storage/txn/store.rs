@@ -445,12 +445,7 @@ mod tests {
                 ScanMode::Forward,
             ))
         }
-        fn iter_cf(
-            &self,
-            _: &str,
-            _: IterOption,
-            _: ScanMode,
-        ) -> EngineResult<Cursor<Self::Iter>> {
+        fn iter_cf(&self, _: &str, _: IterOption, _: ScanMode) -> EngineResult<Cursor<Self::Iter>> {
             Ok(Cursor::new(
                 MockRangeSnapshotIter::default(),
                 ScanMode::Forward,
