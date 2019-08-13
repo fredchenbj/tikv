@@ -136,6 +136,10 @@ quick_error! {
             description(err.description())
             display("Snapshot {}", err)
         }
+        Key(key_error: String) {
+            description("key decoded error")
+            display("Key {}", key_error)
+        }
     }
 }
 

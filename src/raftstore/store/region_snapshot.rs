@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::raftstore::store::keys::DATA_PREFIX_KEY;
 use crate::raftstore::store::{keys, util, PeerStorage};
-use crate::raftstore::Result;
+use crate::raftstore::{Error, Result};
 use tikv_util::keybuilder::KeyBuilder;
 use tikv_util::metrics::CRITICAL_ERROR;
 use tikv_util::{panic_when_unexpected_key_or_data, set_panic_mark};
@@ -150,23 +150,13 @@ impl Peekable for RegionSnapshot {
             self.region.get_end_key(),
         )?;
 
-        let mut v1 = Vec::with_capacity(key.len());
-        let mut index = 0;
-        let split = ':' as u8;
-        for &e in key.iter() {
-            if e == split {
-                break;
-            }
-            index = index + 1;
-            if index == 1 {
-                continue;
-            }
-            v1.push(e);
+        match keys::get_cf_and_key_from_encoded_key(key) {
+            Ok((cf, data_key)) => self.snap.get_value_cf(&cf, &data_key),
+            Err(err) => {
+                error!("{}", err);
+                Err(EngineError::RocksDb("get cf and key error".into()))
+            },
         }
-
-        let cf = String::from_utf8(v1).unwrap();
-        let data_key = keys::get_key(key, index);
-        self.snap.get_value_cf(&cf, &data_key)
     }
 }
 
@@ -177,8 +167,8 @@ pub struct RegionIterator {
     iter: DBIterator<Arc<DB>>,
     valid: bool,
     region: Arc<Region>,
-    start_key: Vec<u8>,
-    end_key: Vec<u8>,
+    start_key: Vec<u8>,  // rocksdb engine's start key
+    end_key: Vec<u8>,    // rocksdb engine's end key
 }
 
 fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
@@ -278,17 +268,24 @@ impl RegionIterator {
     }
 
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
-        info!("enter seek for key: {:?}", key);
+        debug!("enter seek for key: {:?}", key);
         self.should_seekable(key)?;
-        let key = keys::get_key2(key);
-        info!("new key: {:?}", key);
-        if key == self.end_key {
-            self.valid = false;
-        } else {
-            self.valid = self.iter.seek(key.as_slice().into());
-        }
+        match keys::get_key_from_encoded_region_key(key) {
+            Ok(new_key) => {
+                debug!("new key: {:?}", new_key);
+                if new_key == self.end_key {
+                    self.valid = false;
+                } else {
+                    self.valid = self.iter.seek(new_key.as_slice().into());
+                }
 
-        Ok(self.update_valid(true))
+                Ok(self.update_valid(true))
+            },
+            Err(err) => {
+                error!("seek key: {:?}, error: {}", key, err);
+                Err(Error::Key(String::from("seek key error")))
+            },
+        }
     }
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {

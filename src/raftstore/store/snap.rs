@@ -1769,7 +1769,7 @@ pub mod tests {
         let mut cf_file = Vec::with_capacity(super::SNAPSHOT_CFS.len());
         for (i, cf) in super::SNAPSHOT_CFS.iter().enumerate() {
             let f = super::CfFile {
-                cf,
+                cf: cf.to_string(),
                 size: 100 * (i + 1) as u64,
                 checksum: 1000 * (i + 1) as u32,
                 ..Default::default()

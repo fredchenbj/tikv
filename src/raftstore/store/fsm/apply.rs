@@ -1149,186 +1149,120 @@ impl ApplyDelegate {
 // Write commands related.
 impl ApplyDelegate {
     fn handle_put(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
-        let (key, value) = (req.get_put().get_key(), req.get_put().get_value());
+        let (encoded_key, value) = (req.get_put().get_key(), req.get_put().get_value());
         // region key range has no data prefix, so we must use origin key to check.
-        util::check_key_in_region(key, &self.region)?;
-
-        let (first, key) = keys::get_cf_and_key_from_key(key);
-
-        let s1 = match std::str::from_utf8(&first) {
-            Ok(v) => v,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
+        util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        let key = keys::data_key(&key);
-        self.metrics.size_diff_hint += key.len() as i64;
-        self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_put().get_cf().is_empty() || s1 != "" {
-            let cf = s1;
-            // TODO: don't allow write preseved cfs.
-            if cf == CF_LOCK {
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-                self.metrics.lock_cf_written_bytes += value.len() as u64;
-            }
+        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+            Ok((cf, key)) => {
+                self.metrics.size_diff_hint += key.len() as i64;
+                self.metrics.size_diff_hint += value.len() as i64;
 
-            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
-                let _ = rocks::util::create_cf_handle_with_option(
-                    &ctx.engines.kv,
-                    cf,
-                    config::get_raw_cf_option(),
-                );
-                info!("put create cf");
-            }
-
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to write ({}, {}) to cf {}: {:?}",
-                        self.tag,
-                        hex::encode_upper(&key),
-                        escape(value),
-                        cf,
-                        e
-                    )
-                });
-        } else {
-            ctx.kv_wb().put(&key, value).unwrap_or_else(|e| {
-                panic!(
-                    "{} failed to write ({}, {}): {:?}",
-                    self.tag,
-                    hex::encode_upper(&key),
-                    escape(value),
-                    e
-                );
-            });
+                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+                    let _ = rocks::util::create_cf_handle_with_option(
+                        &ctx.engines.kv,
+                        &cf,
+                        config::get_raw_cf_option(),
+                    );
+                    info!("put create cf: {}", cf);
+                }
+                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+                    .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "{} failed to write ({}, {}) to cf {}: {:?}",
+                            self.tag,
+                            hex::encode_upper(&key),
+                            escape(value),
+                            cf,
+                            e
+                        )
+                    });
+                return Ok(resp)
+            },
+            Err(err) => {
+                error!("key: {:?}, error: {}", encoded_key, err);
+                return Err(Error::Key(String::from("handle put error")))
+            },
         }
-        Ok(resp)
     }
 
-    // handle update
     fn handle_update(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
-        let (key, value) = (req.get_update().get_key(), req.get_update().get_value());
+        let (encoded_key, value) = (req.get_update().get_key(), req.get_update().get_value());
         // region key range has no data prefix, so we must use origin key to check.
-        util::check_key_in_region(key, &self.region)?;
-
-        let (first, key) = keys::get_cf_and_key_from_key(key);
-
-        let s1 = match std::str::from_utf8(&first) {
-            Ok(v) => v,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
+        util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        let key = keys::data_key(&key);
-        self.metrics.size_diff_hint += key.len() as i64;
-        self.metrics.size_diff_hint += value.len() as i64;
-        if !req.get_update().get_cf().is_empty() || s1 != "" {
-            let cf = s1;
-            // TODO: don't allow write preseved cfs.
-            if cf == CF_LOCK {
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-                self.metrics.lock_cf_written_bytes += value.len() as u64;
-            }
+        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+            Ok((cf, key)) => {
+                self.metrics.size_diff_hint += key.len() as i64;
+                self.metrics.size_diff_hint += value.len() as i64;
 
-            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
-                let _ = rocks::util::create_cf_handle_with_option(
-                    &ctx.engines.kv,
-                    cf,
-                    config::get_raw_cf_option(),
-                );
-                info!("update create cf");
-            }
-
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| {
-                    ctx.kv_wb()
-                        .merge_cf(handle, &key, value)
-                        .map_err(Into::into)
-                }) // to modify
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to write ({}, {}) to cf {}: {:?}",
-                        self.tag,
-                        escape(&key),
-                        escape(value),
-                        cf,
-                        e
-                    )
-                });
-        } else {
-            ctx.kv_wb().merge(&key, value).unwrap_or_else(|e| {
-                // to modify
-                panic!(
-                    "{} failed to write ({}, {}): {:?}",
-                    self.tag,
-                    escape(&key),
-                    escape(value),
-                    e
-                );
-            });
+                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+                    let _ = rocks::util::create_cf_handle_with_option(
+                        &ctx.engines.kv,
+                        &cf,
+                        config::get_raw_cf_option(),
+                    );
+                    info!("update create cf: {}", cf);
+                }
+                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+                    .and_then(|handle| {
+                        ctx.kv_wb()
+                            .merge_cf(handle, &key, value)
+                            .map_err(Into::into)
+                    }) // to modify
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "{} failed to merge ({}, {}) to cf {}: {:?}",
+                            self.tag,
+                            escape(&key),
+                            escape(value),
+                            cf,
+                            e
+                        )
+                    });
+                return Ok(resp)
+            },
+            Err(err) => {
+                error!("key: {:?}, error: {}", encoded_key, err);
+                return Err(Error::Key(String::from("handle update error")))
+            },
         }
-        Ok(resp)
     }
 
     fn handle_delete(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
-        let key = req.get_delete().get_key();
+        let encoded_key = req.get_delete().get_key();
         // region key range has no data prefix, so we must use origin key to check.
-        util::check_key_in_region(key, &self.region)?;
+        util::check_key_in_region(encoded_key, &self.region)?;
 
-        let (first, key) = keys::get_cf_and_key_from_key(key);
-
-        let s1 = match std::str::from_utf8(&first) {
-            Ok(v) => v,
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
-        };
-
-        let key = keys::data_key(&key);
-        // since size_diff_hint is not accurate, so we just skip calculate the value size.
-        self.metrics.size_diff_hint -= key.len() as i64;
         let resp = Response::new();
-        if !req.get_delete().get_cf().is_empty() || s1 != "" {
-            let cf = s1;
-
-            if !rocks::util::existed_cf(&ctx.engines.kv, cf) {
-                let _ = rocks::util::create_cf_handle(&ctx.engines.kv, cf);
-                info!("delete create cf");
-            }
-
-            // TODO: check whether cf exists or not.
-            rocks::util::get_cf_handle(&ctx.engines.kv, cf)
-                .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "{} failed to delete {}: {}",
-                        self.tag,
-                        hex::encode_upper(&key),
-                        e
-                    )
-                });
-
-            if cf == CF_LOCK {
-                // delete is a kind of write for RocksDB.
-                self.metrics.lock_cf_written_bytes += key.len() as u64;
-            } else {
+        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+            Ok((cf, key)) => {
+                self.metrics.size_diff_hint -= key.len() as i64;
+                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+                    error!("key: {:?} don't have cf: {}", encoded_key, cf);
+                    return Err(Error::Key(String::from("handle delete error")))
+                }
+                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+                    .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
+                    .unwrap_or_else(|e| {
+                        panic!(
+                            "{} failed to delete {}: {}",
+                            self.tag,
+                            hex::encode_upper(&key),
+                            e
+                        )
+                    });
                 self.metrics.delete_keys_hint += 1;
-            }
-        } else {
-            ctx.kv_wb().delete(&key).unwrap_or_else(|e| {
-                panic!(
-                    "{} failed to delete {}: {}",
-                    self.tag,
-                    hex::encode_upper(&key),
-                    e
-                )
-            });
-            self.metrics.delete_keys_hint += 1;
+                return Ok(resp)
+            },
+            Err(err) => {
+                error!("key: {:?}, error: {}", encoded_key, err);
+                return Err(Error::Key(String::from("handle delete error")))
+            },
         }
-
-        Ok(resp)
     }
 
     fn handle_delete_range(

@@ -45,6 +45,10 @@ pub const SNAPSHOT_RAFT_STATE_SUFFIX: u8 = 0x04;
 // For region meta
 pub const REGION_STATE_SUFFIX: u8 = 0x01;
 
+pub const COLON_SPLITTER: u8 = b':';
+pub const SEMICOLON_SPLITTER: u8 = b';';
+pub const SHARD_KEY_LEN: usize = 1;
+
 #[inline]
 fn make_region_prefix(region_id: u64, suffix: u8) -> [u8; 11] {
     let mut key = [0; 11];
@@ -257,35 +261,6 @@ pub fn is_raw_key(key: &[u8]) -> bool {
     false
 }
 
-/// return (cf, key), default cf is "default"
-pub fn get_cf_and_key_from_key(key: &[u8]) -> (Vec<u8>, Vec<u8>) {
-    if key.len() == 0 {
-        return (Vec::new(), Vec::new())
-    }
-    let mut index = 0;
-    let split = ':' as u8;
-    let split2 = ';' as u8;
-    for &e in key.iter() {
-        if e == split || e == split2 {
-            break;
-        }
-        index = index + 1;
-    }
-    if index == key.len() {
-        return (String::from("default").into_bytes(), key.to_owned());
-    }
-
-    let mut v1 = Vec::with_capacity(index - 1);
-    let mut v2 = Vec::with_capacity(key.len() - index);
-    let (first, second) = key.split_at(index);
-    v1.extend_from_slice(&first[1..]);
-    v2.extend_from_slice(&first[0..1]);
-    if key.len() - index > 1 {
-        v2.extend_from_slice(&second[1..]);
-    }
-    (v1, v2)
-}
-
 pub fn get_cf_from_key(key: &[u8]) -> Vec<u8> {
     let mut index = 0;
     let split = ':' as u8;
@@ -425,6 +400,155 @@ pub fn get_key_from_region_key(key: &[u8]) -> Vec<u8> {
         v2.extend_from_slice(&[shardkey]);
     }
     v2
+}
+
+
+/// new encoded key related functions
+/// encoded_key: "[shardByte]+[tableName]+[:]+[rawKey]"
+/// region's start_key and end_key have three situations:
+/// (1) "[]", (2) "[shardByte]+[tableName]+[;]", (3) encoded_key.
+
+// cf is "[tableName]" and rocksdb key is "[z]+[shardByte]+[rawKey]"
+pub fn get_cf_and_key_from_encoded_key(encoded_key: &[u8]) -> std::result::Result<(String, Vec<u8>), &str> {
+    let key_len = encoded_key.len();
+    if key_len < 4 {
+        return Err("Key length is less than four")
+    }
+
+    let mut index = 0;
+    for &e in encoded_key.iter() {
+        // the shardByte could be colon
+        if index != 0 && e == COLON_SPLITTER {
+            break
+        }
+        index = index + 1;
+    }
+    if index == key_len {
+        return Err("not found the split colon")
+    }
+
+    let mut cf = Vec::with_capacity(index - 1);
+    let mut key = Vec::with_capacity(key_len - index + DATA_PREFIX_KEY.len());
+    // first is [shardByte]+[tableName], second is [rawKey]
+    let (first, second) = encoded_key.split_at(index);
+    cf.extend_from_slice(&first[1..]);
+    key.extend_from_slice(DATA_PREFIX_KEY);
+    key.extend_from_slice(&first[0..1]);
+
+    if key_len - index > 1 {
+        key.extend_from_slice(&second[1..]);
+    }
+    if let Ok(cf) = String::from_utf8(cf) {
+        return Ok((cf, key))
+    } else {
+        return Err("get table name error")
+    }
+}
+
+/// region -> cf
+/// region -> region_start_key (Rocksdb Form)
+/// region -> region_end_key (Rocksdb Form)
+
+/// get cf of the current region
+pub fn get_cf_from_encoded_region(region: &Region) -> std::result::Result<String, &str> {
+    assert!(!region.get_peers().is_empty());
+    let start_key = region.get_start_key();
+    let end_key = region.get_end_key();
+    if start_key.len() != 0 {
+        debug!("get cf from start_key");
+        get_cf_from_encoded_region_key(start_key)
+    } else if end_key.len() != 0 {
+        debug!("get cf from end_key");
+        get_cf_from_encoded_region_key(end_key)
+    } else {
+        Err("start_key and end_key are all empty")
+    }
+}
+
+// region key could be "[shardByte]+[tableName]+[;]"
+// we assert that tablename don't contains semicolon and colon
+fn get_cf_from_encoded_region_key(key: &[u8]) -> std::result::Result<String, &str> {
+    let key_len = key.len();
+    if key_len < 3 {
+        return Err("region key length is less than three")
+    }
+    let mut index = 0;
+    for &e in key.iter() {
+        if index != 0 && (e == COLON_SPLITTER || e == SEMICOLON_SPLITTER) {
+            break;
+        }
+        index = index + 1;
+    }
+    if index == key_len {
+        return Err("couldn't get cf from region key")
+    } else if key[index] == SEMICOLON_SPLITTER && key_len > index + 1 {
+        return Err("wrong format region key")
+    }
+
+    let mut cf = Vec::with_capacity(index - 1);
+    let (first, _) = key.split_at(index);
+    cf.extend_from_slice(&first[1..]);
+    if let Ok(cf) = String::from_utf8(cf) {
+        return Ok(cf)
+    } else {
+        return Err("get cf name error")
+    }
+}
+
+pub fn get_start_key_from_encoded_region(region: &Region) -> std::result::Result<Vec<u8>, &str> {
+    assert!(!region.get_peers().is_empty());
+    let region_start_key = region.get_start_key();
+    if region_start_key.is_empty() {
+        Ok(DATA_MIN_KEY.to_vec())
+    } else {
+        get_key_from_encoded_region_key(region.get_start_key())
+    }
+}
+
+pub fn get_end_key_from_encoded_region(region: &Region) -> std::result::Result<Vec<u8>, &str> {
+    assert!(!region.get_peers().is_empty());
+    let region_end_key = region.get_end_key();
+    if region_end_key.is_empty() {
+        Ok(DATA_MAX_KEY.to_vec())
+    } else {
+        get_key_from_encoded_region_key(region_end_key)
+    }
+}
+
+// non-empty region key
+// if "[shardByte]+[tableName]+[;]" -> [z]+[shardByte+1] or shardByte=255 return DATA_MAX_KEY
+// if "[shardByte]+[tableName]+[:]+[rawKey]" -> [z] + [shardByte] + rawKey
+pub fn get_key_from_encoded_region_key(encoded_key: &[u8]) -> std::result::Result<Vec<u8>, &str> {
+    let key_len = encoded_key.len();
+    if key_len < 3 {
+        return Err("region key length is less than three")
+    }
+    let mut index = 0;
+    for &e in encoded_key.iter() {
+        if index != 0 && (e == COLON_SPLITTER || e == SEMICOLON_SPLITTER) {
+            break;
+        }
+        index = index + 1;
+    }
+    if index == key_len {
+        return Err("couldn't get key from encoded region key")
+    } else if encoded_key[index] == SEMICOLON_SPLITTER && key_len > index + 1 {
+        return Err("wrong format region key")
+    }
+
+    if encoded_key[index] == SEMICOLON_SPLITTER {
+        if encoded_key[0] == 0xFF as u8 {
+            return Ok(DATA_MAX_KEY.to_vec())
+        } else {
+            return Ok(vec![DATA_PREFIX, encoded_key[0]+1])
+        }
+    } else {
+        let mut key = Vec::with_capacity(DATA_PREFIX_KEY.len() + SHARD_KEY_LEN +  key_len - index - 1);
+        key.push(DATA_PREFIX);
+        key.push(encoded_key[0]);
+        key.extend_from_slice(&encoded_key[(index+1)..]);
+        return Ok(key)
+    }
 }
 
 #[cfg(test)]
@@ -570,5 +694,55 @@ mod tests {
         region.set_end_key(vec![2]);
         assert_eq!(enc_start_key(&region), vec![DATA_PREFIX, 1]);
         assert_eq!(enc_end_key(&region), vec![DATA_PREFIX, 2]);
+    }
+
+    #[test]
+    fn test_new_encoded_key() {
+        // normal situation
+        assert_eq!(get_cf_and_key_from_encoded_key(b"2table:raw_key").unwrap(), (String::from("table"), b"z2raw_key".to_vec()));
+        // rawKey is null
+        assert_eq!(get_cf_and_key_from_encoded_key(b"0table:").unwrap(), (String::from("table"), vec![b'z', b'0']));
+        // shardKey is colon
+        assert_eq!(get_cf_and_key_from_encoded_key(b":table:key").unwrap(), (String::from("table"), b"z:key".to_vec()));
+        // len < 4
+        assert!(get_cf_and_key_from_encoded_key(b"0t:").is_err());
+        // not found colon
+        assert!(get_cf_and_key_from_encoded_key(b"0ttttt").is_err());
+    }
+
+    #[test]
+    fn test_new_encoded_region() {
+        let mut region = Region::new();
+        // uninitialised region should not be passed in `enc_start_key` and `enc_end_key`.
+        assert!(::panic_hook::recover_safe(|| get_cf_from_encoded_region(&region)).is_err());
+        assert!(::panic_hook::recover_safe(|| get_start_key_from_encoded_region(&region)).is_err());
+        assert!(::panic_hook::recover_safe(|| get_end_key_from_encoded_region(&region)).is_err());
+
+        region.mut_peers().push(Peer::new());
+        assert_eq!(get_cf_from_encoded_region(&region), Err("start_key and end_key are all empty"));
+        assert_eq!(get_start_key_from_encoded_region(&region), Ok(DATA_MIN_KEY.to_vec()));
+        assert_eq!(get_end_key_from_encoded_region(&region), Ok(DATA_MAX_KEY.to_vec()));
+
+        region.set_end_key(b":tablekey".to_vec());
+        assert_eq!(get_cf_from_encoded_region(&region), Err("couldn't get cf from region key"));
+        assert_eq!(get_end_key_from_encoded_region(&region), Err("couldn't get key from encoded region key"));
+
+        region.set_end_key(b"0table;".to_vec());
+        assert_eq!(get_cf_from_encoded_region(&region).unwrap(), String::from("table"));
+        assert_eq!(get_end_key_from_encoded_region(&region), Ok(b"z1".to_vec()));
+
+        region.set_end_key(b"0table;xxx".to_vec());
+        assert_eq!(get_cf_from_encoded_region(&region), Err("wrong format region key"));
+        assert_eq!(get_end_key_from_encoded_region(&region), Err("wrong format region key"));
+
+        region.set_end_key(b";table:key".to_vec());
+        assert_eq!(get_cf_from_encoded_region(&region).unwrap(), String::from("table"));
+        assert_eq!(get_end_key_from_encoded_region(&region), Ok(b"z;key".to_vec()));
+
+        let mut key = Vec::new();
+        key.push(0xFF as u8);
+        key.extend_from_slice(b"table;");
+        region.set_end_key(key);
+        assert_eq!(get_end_key_from_encoded_region(&region), Ok(DATA_MAX_KEY.to_vec()));
     }
 }
