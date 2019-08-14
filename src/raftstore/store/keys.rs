@@ -390,6 +390,19 @@ pub fn get_key_from_encoded_region_key(encoded_key: &[u8]) -> std::result::Resul
     }
 }
 
+/// rocks_key: [z]+[shardByte]+[rawKey] -> [shardByte]+[tableName]+[:]+[rawKey]
+pub fn get_origin_key_of_region<'a, 'b>(cf: &'a str, rocks_key: &[u8]) -> std::result::Result<Vec<u8>, &'b str> {
+    if rocks_key.len() < 2 {
+        return Err("rocks key is wrong format");
+    }
+    let mut origin_key = Vec::with_capacity(cf.len() + rocks_key.len());
+    origin_key.push(rocks_key[1]);
+    origin_key.extend_from_slice(cf.as_bytes());
+    origin_key.push(COLON_SPLITTER);
+    origin_key.extend_from_slice(&rocks_key[2..]);
+    return Ok(origin_key)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -542,20 +555,30 @@ mod tests {
             get_cf_and_key_from_encoded_key(b"2table:raw_key").unwrap(),
             (String::from("table"), b"z2raw_key".to_vec())
         );
+        assert_eq!(get_origin_key_of_region("table", b"z2raw_key").unwrap(), b"2table:raw_key".to_vec());
+
         // rawKey is null
         assert_eq!(
             get_cf_and_key_from_encoded_key(b"0table:").unwrap(),
             (String::from("table"), vec![b'z', b'0'])
         );
+        assert_eq!(get_origin_key_of_region("table",b"z0").unwrap(), b"0table:".to_vec());
+
         // shardKey is colon
         assert_eq!(
             get_cf_and_key_from_encoded_key(b":table:key").unwrap(),
             (String::from("table"), b"z:key".to_vec())
         );
+        assert_eq!(get_origin_key_of_region("table", b"z:key").unwrap(), b":table:key".to_vec());
+
         // len < 4
         assert!(get_cf_and_key_from_encoded_key(b"0t:").is_err());
         // not found colon
         assert!(get_cf_and_key_from_encoded_key(b"0ttttt").is_err());
+
+        // for rocks_key len == 2 & len < 2
+        assert_eq!(get_origin_key_of_region("table", b"z0").unwrap(), b"0table:".to_vec());
+        assert!(get_origin_key_of_region("table", b"z").is_err());
     }
 
     #[test]

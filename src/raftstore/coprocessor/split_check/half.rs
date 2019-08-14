@@ -54,8 +54,8 @@ impl SplitChecker for Checker {
             vec![]
         } else {
             let data_key = self.buckets.swap_remove(mid);
-            let key = keys::origin_key(&data_key).to_vec();
-            vec![key]
+            //let key = keys::origin_key(&data_key).to_vec();
+            vec![data_key]
         }
     }
 

@@ -54,7 +54,7 @@ impl SplitChecker for Checker {
 
         let mut over_limit = self.split_keys.len() as u64 >= self.batch_split_limit;
         if self.current_size > self.split_size && !over_limit {
-            self.split_keys.push(keys::origin_key(entry.key()).to_vec());
+            self.split_keys.push(entry.key().to_vec());
             // if for previous on_kv() self.current_size == self.split_size,
             // the split key would be pushed this time, but the entry size for this time should not be ignored.
             self.current_size = if self.current_size - size == self.split_size {
@@ -542,7 +542,7 @@ pub mod tests {
         let region = Region::default();
         let mut ctx = ObserverContext::new(&region);
         loop {
-            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 4, CF_WRITE);
+            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 4, CF_WRITE.to_string());
             if checker.on_kv(&mut ctx, &data) {
                 break;
             }
@@ -557,7 +557,7 @@ pub mod tests {
         let region = Region::default();
         let mut ctx = ObserverContext::new(&region);
         for _ in 0..2 {
-            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 5, CF_WRITE);
+            let data = KeyEntry::new(b"zxxxx".to_vec(), 0, 5, CF_WRITE.to_string());
             if checker.on_kv(&mut ctx, &data) {
                 break;
             }

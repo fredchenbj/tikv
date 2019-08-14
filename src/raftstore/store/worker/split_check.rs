@@ -16,7 +16,7 @@ use kvproto::pdpb::CheckPolicy;
 use crate::raftstore::coprocessor::CoprocessorHost;
 use crate::raftstore::coprocessor::SplitCheckerHost;
 use crate::raftstore::store::{keys, Callback, CasualMessage, CasualRouter};
-use crate::raftstore::Result;
+use crate::raftstore::{Result, Error};
 use tikv_util::keybuilder::KeyBuilder;
 use tikv_util::worker::Runnable;
 
@@ -27,11 +27,11 @@ pub struct KeyEntry {
     key: Vec<u8>,
     pos: usize,
     value_size: usize,
-    cf: CfName,
+    cf: String,
 }
 
 impl KeyEntry {
-    pub fn new(key: Vec<u8>, pos: usize, value_size: usize, cf: CfName) -> KeyEntry {
+    pub fn new(key: Vec<u8>, pos: usize, value_size: usize, cf: String) -> KeyEntry {
         KeyEntry {
             key,
             pos,
@@ -45,7 +45,7 @@ impl KeyEntry {
     }
 
     pub fn is_commit_version(&self) -> bool {
-        self.cf == CF_WRITE
+        self.cf == CF_WRITE.to_string()
     }
 
     pub fn entry_size(&self) -> usize {
@@ -67,14 +67,14 @@ impl Ord for KeyEntry {
 }
 
 struct MergedIterator<'a> {
-    iters: Vec<(CfName, DBIterator<&'a DB>)>,
+    iters: Vec<(String, DBIterator<&'a DB>)>,
     heap: BinaryHeap<KeyEntry>,
 }
 
 impl<'a> MergedIterator<'a> {
     fn new(
         db: &'a DB,
-        cfs: &[CfName],
+        cfs: &[String],
         start_key: &[u8],
         end_key: &[u8],
         fill_cache: bool,
@@ -93,10 +93,10 @@ impl<'a> MergedIterator<'a> {
                     iter.key().to_vec(),
                     pos,
                     iter.value().len(),
-                    *cf,
+                     cf.to_string(),
                 ));
             }
-            iters.push((*cf, iter));
+            iters.push((cf.to_string(), iter));
         }
         Ok(MergedIterator { iters, heap })
     }
@@ -109,7 +109,7 @@ impl<'a> MergedIterator<'a> {
         let (cf, iter) = &mut self.iters[pos];
         if iter.next() {
             // TODO: avoid copy key.
-            let mut e = KeyEntry::new(iter.key().to_vec(), pos, iter.value().len(), cf);
+            let mut e = KeyEntry::new(iter.key().to_vec(), pos, iter.value().len(), cf.to_string());
             let mut front = self.heap.peek_mut().unwrap();
             mem::swap(&mut e, &mut front);
             Some(e)
@@ -166,8 +166,28 @@ impl<S: CasualRouter> Runner<S> {
     fn check_split(&mut self, task: Task) {
         let region = &task.region;
         let region_id = region.get_id();
-        let start_key = keys::enc_start_key(region);
-        let end_key = keys::enc_end_key(region);
+        let start_key = match keys::get_start_key_from_encoded_region(region) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("error: {}", e);
+                return
+            }
+        };
+        let end_key = match keys::get_end_key_from_encoded_region(region) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("error: {}", e);
+                return
+            }
+        };
+        let cf = match keys::get_cf_from_encoded_region(region) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("error: {}", e);
+                return
+            }
+        };
+
         debug!(
             "executing task";
             "region_id" => region_id,
@@ -189,8 +209,12 @@ impl<S: CasualRouter> Runner<S> {
 
         let split_keys = match host.policy() {
             CheckPolicy::SCAN => {
+                debug!("check policy scan");
                 match self.scan_split_keys(&mut host, region, &start_key, &end_key) {
-                    Ok(keys) => keys,
+                    Ok(keys) => keys
+                        .into_iter()
+                        .map(|k| keys::get_origin_key_of_region(&cf, &k).unwrap())
+                        .collect(),
                     Err(e) => {
                         error!("failed to scan split key"; "region_id" => region_id, "err" => %e);
                         return;
@@ -249,7 +273,16 @@ impl<S: CasualRouter> Runner<S> {
         end_key: &[u8],
     ) -> Result<Vec<Vec<u8>>> {
         let timer = CHECK_SPILT_HISTOGRAM.start_coarse_timer();
-        MergedIterator::new(self.engine.as_ref(), LARGE_CFS, start_key, end_key, false).map(
+        let cf = match keys::get_cf_from_encoded_region(region) {
+            Ok(t) => t,
+            Err(e) => {
+                error!("error: {}", e);
+                return Err(Error::Key(String::from("get cf from region error")))
+            }
+        };
+
+        let cfs = vec![cf];
+        MergedIterator::new(self.engine.as_ref(), &cfs, start_key, end_key, false).map(
             |mut iter| {
                 while let Some(e) = iter.next() {
                     if host.on_kv(region, &e) {
