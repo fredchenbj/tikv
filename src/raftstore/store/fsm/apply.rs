@@ -1154,7 +1154,7 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
             Ok((cf, key)) => {
                 self.metrics.size_diff_hint += key.len() as i64;
                 self.metrics.size_diff_hint += value.len() as i64;
@@ -1194,7 +1194,7 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
             Ok((cf, key)) => {
                 self.metrics.size_diff_hint += key.len() as i64;
                 self.metrics.size_diff_hint += value.len() as i64;
@@ -1238,7 +1238,7 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_key(encoded_key) {
+        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
             Ok((cf, key)) => {
                 self.metrics.size_diff_hint -= key.len() as i64;
                 if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {

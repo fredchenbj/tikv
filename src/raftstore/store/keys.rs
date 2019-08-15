@@ -244,7 +244,7 @@ pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
 /// (1) "[]", (2) "[shardByte]+[tableName]+[;]", (3) encoded_key.
 
 // cf is "[tableName]" and rocksdb key is "[z]+[shardByte]+[rawKey]"
-pub fn get_cf_and_key_from_encoded_key(
+pub fn get_cf_and_key_from_encoded_normal_key(
     encoded_key: &[u8],
 ) -> std::result::Result<(String, Vec<u8>), &str> {
     let key_len = encoded_key.len();
@@ -282,6 +282,44 @@ pub fn get_cf_and_key_from_encoded_key(
     }
 }
 
+// this key is produced by pre-split
+pub fn is_presplit_boundary(encoded_key: &[u8]) -> bool {
+    let key_len = encoded_key.len();
+    assert!(key_len > 0);
+
+    let mut index = 0;
+    for &e in encoded_key.iter() {
+        // the shardByte could be colon or semicolon
+        if (index != 0) && (e == SEMICOLON_SPLITTER || e == COLON_SPLITTER) {
+            break;
+        }
+        index = index + 1;
+    }
+    if (index == key_len - 1) && (encoded_key[index] == SEMICOLON_SPLITTER)  {
+        return true
+    }
+    false
+}
+
+// this key is [shardByte]+[tableName]+[:]
+pub fn is_colon_boundary(encoded_key: &[u8]) -> bool {
+    let key_len = encoded_key.len();
+    assert!(key_len > 0);
+
+    let mut index = 0;
+    for &e in encoded_key.iter() {
+        // the shardByte could be colon or semicolon
+        if (index != 0) && (e == SEMICOLON_SPLITTER || e == COLON_SPLITTER) {
+            break;
+        }
+        index = index + 1;
+    }
+    if (index == key_len - 1) && (encoded_key[index] == COLON_SPLITTER)  {
+        return true
+    }
+    false
+}
+
 /// region -> cf
 /// region -> region_start_key (Rocksdb Form)
 /// region -> region_end_key (Rocksdb Form)
@@ -290,16 +328,12 @@ pub fn get_cf_and_key_from_encoded_key(
 /// get cf of the current region
 pub fn get_cf_from_encoded_region(region: &Region) -> std::result::Result<String, &str> {
     assert!(!region.get_peers().is_empty());
-    let start_key = region.get_start_key();
     let end_key = region.get_end_key();
-    if start_key.len() != 0 {
-        debug!("get cf from start_key");
-        get_cf_from_encoded_region_key(start_key)
-    } else if end_key.len() != 0 {
-        debug!("get cf from end_key");
+    if end_key.len() != 0 {
         get_cf_from_encoded_region_key(end_key)
     } else {
-        Err("start_key and end_key are all empty")
+        // let the last not-used region to mapped to default cf
+        Ok("default".to_string())
     }
 }
 
@@ -333,11 +367,46 @@ pub fn get_cf_from_encoded_region_key(key: &[u8]) -> std::result::Result<String,
     }
 }
 
+// assert it is normal key: "[shardByte]+[tableName]+[:]+[rawKey]"
+fn get_key_from_encoded_normal_key(normal_key: &[u8]) -> std::result::Result<Vec<u8>, &str> {
+    let key_len = normal_key.len();
+    if key_len < 4 {
+        return Err("region normal key length is less than four");
+    }
+    let mut index = 0;
+    for &e in encoded_key.iter() {
+        if index != 0 && e == COLON_SPLITTER {
+            break;
+        }
+        index = index + 1;
+    }
+    if index == key_len {
+        return Err("couldn't get key from encoded region key");
+    } else if encoded_key[index] == COLON_SPLITTER && key_len == index + 1 {
+        return Err("not region normal key");
+    }
+
+    let mut key =
+        Vec::with_capacity(DATA_PREFIX_KEY.len() + SHARD_KEY_LEN + key_len - index - 1);
+    key.push(DATA_PREFIX);
+    key.push(encoded_key[0]);
+    key.extend_from_slice(&encoded_key[(index + 1)..]);
+    Ok(key)
+}
+
+// three cases: "", presplit-boundary, normal keys
 pub fn get_start_key_from_encoded_region(region: &Region) -> std::result::Result<Vec<u8>, &str> {
     assert!(!region.get_peers().is_empty());
     let region_start_key = region.get_start_key();
     if region_start_key.is_empty() {
         Ok(DATA_MIN_KEY.to_vec())
+    } if is_presplit_boundary(region_start_key) {
+        let region_end_key = region.get_end_key;
+        if region_end_key.len() == 0 {
+            Ok(DATA_MAX_KEY.to_vec())
+        } else {
+            vec![b'z', region_end_key[0]]
+        }
     } else {
         get_key_from_encoded_region_key(region.get_start_key())
     }
@@ -402,6 +471,15 @@ pub fn get_origin_key_of_region<'a, 'b>(cf: &'a str, rocks_key: &[u8]) -> std::r
     origin_key.extend_from_slice(&rocks_key[2..]);
     return Ok(origin_key)
 }
+
+
+pub fn is_last_encoded_region(region: &Region) -> bool {
+    if region.get_end_key().len() == 0 {
+        return true;
+    }
+    false
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -552,29 +630,29 @@ mod tests {
     fn test_new_encoded_key() {
         // normal situation
         assert_eq!(
-            get_cf_and_key_from_encoded_key(b"2table:raw_key").unwrap(),
+            get_cf_and_key_from_encoded_normal_key(b"2table:raw_key").unwrap(),
             (String::from("table"), b"z2raw_key".to_vec())
         );
         assert_eq!(get_origin_key_of_region("table", b"z2raw_key").unwrap(), b"2table:raw_key".to_vec());
 
         // rawKey is null
         assert_eq!(
-            get_cf_and_key_from_encoded_key(b"0table:").unwrap(),
+            get_cf_and_key_from_encoded_normal_key(b"0table:").unwrap(),
             (String::from("table"), vec![b'z', b'0'])
         );
         assert_eq!(get_origin_key_of_region("table",b"z0").unwrap(), b"0table:".to_vec());
 
         // shardKey is colon
         assert_eq!(
-            get_cf_and_key_from_encoded_key(b":table:key").unwrap(),
+            get_cf_and_key_from_encoded_normal_key(b":table:key").unwrap(),
             (String::from("table"), b"z:key".to_vec())
         );
         assert_eq!(get_origin_key_of_region("table", b"z:key").unwrap(), b":table:key".to_vec());
 
         // len < 4
-        assert!(get_cf_and_key_from_encoded_key(b"0t:").is_err());
+        assert!(get_cf_and_key_from_encoded_normal_key(b"0t:").is_err());
         // not found colon
-        assert!(get_cf_and_key_from_encoded_key(b"0ttttt").is_err());
+        assert!(get_cf_and_key_from_encoded_normal_key(b"0ttttt").is_err());
 
         // for rocks_key len == 2 & len < 2
         assert_eq!(get_origin_key_of_region("table", b"z0").unwrap(), b"0table:".to_vec());

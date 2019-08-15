@@ -840,11 +840,14 @@ impl<T, C> RaftPollerBuilder<T, C> {
         let t = Instant::now();
 
         let mut ranges = Vec::new();
-        let mut last_start_key = keys::data_key(b"");
+        let sentinel_key = keys::data_key(b"");
+        let mut last_start_key = sentinel_key.clone();
         for region_id in meta.region_ranges.values() {
             let region = &meta.regions[region_id];
+            let end_key = region.get_end_key();
             let start_key = keys::enc_start_key(region);
             ranges.push((last_start_key, start_key));
+            if ken.len() =
             last_start_key = keys::enc_end_key(region);
         }
         ranges.push((last_start_key, keys::DATA_MAX_KEY.to_vec()));

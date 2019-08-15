@@ -150,7 +150,7 @@ impl Peekable for RegionSnapshot {
             self.region.get_end_key(),
         )?;
 
-        match keys::get_cf_and_key_from_encoded_key(key) {
+        match keys::get_cf_and_key_from_encoded_normal_key(key) {
             Ok((cf, data_key)) => self.snap.get_value_cf(&cf, &data_key),
             Err(err) => {
                 error!("{}", err);

@@ -10,3 +10,4 @@ pub const CF_META: CfName = "meta";
 pub const LARGE_CFS: &[CfName] = &[CF_DEFAULT, CF_WRITE];
 pub const ALL_CFS: &[CfName] = &[CF_DEFAULT, CF_LOCK, CF_WRITE, CF_RAFT, CF_META];
 pub const DATA_CFS: &[CfName] = &[CF_DEFAULT, CF_LOCK, CF_WRITE];
+pub const KV_CFS: &[CfName] = &[CF_DEFAULT, CF_LOCK, CF_WRITE, CF_RAFT];
