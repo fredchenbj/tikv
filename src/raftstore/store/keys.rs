@@ -48,6 +48,7 @@ pub const REGION_STATE_SUFFIX: u8 = 0x01;
 pub const COLON_SPLITTER: u8 = b':';
 pub const SEMICOLON_SPLITTER: u8 = b';';
 pub const SHARD_KEY_LEN: usize = 1;
+pub const TABLE_LEN: usize = 4;
 
 #[inline]
 fn make_region_prefix(region_id: u64, suffix: u8) -> [u8; 11] {

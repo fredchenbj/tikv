@@ -51,12 +51,10 @@ macro_rules! exec_with_retry {
     };
 }
 
-pub fn split_start_key(key: &[u8], prefix: u8) -> Vec<u8> {
-    let mut v = Vec::with_capacity(2 + key.len());
-    v.push(prefix);
-    // v.extend_from_slice(&[prefix]);
-    v.extend_from_slice(key);
-    v.push(':' as u8);
+pub fn split_start_key(table_key: &[u8], shard_byte: u8) -> Vec<u8> {
+    let mut v = Vec::with_capacity(1 + key.len());
+    v.extend_from_slice(table_key);
+    v.push(shard_byte);
     v
 }
 
@@ -131,9 +129,13 @@ fn main() {
     let client = Arc::new(client);
     //println!("{}", mem::size_of_val(&client));
 
-    let mut table_name = "table";
-    if let Some(tablename) = matches.value_of("table-name") {
-        table_name = tablename;
+    let mut table_name = "tttt";
+    if let Some(t) = matches.value_of("table-name") {
+        if t.len() != tikv::raftstore::store::keys::TABLE_LEN {
+            println!("the length of table is wrong");
+            return
+        }
+        table_name = t;
     }
 
     //let mut shard_key_bits: u8 = 2;
@@ -144,14 +146,15 @@ fn main() {
     let max_count: u8 = 1 << shard_key_bits;
 
     for i in 0..max_count {
-        let new_key_prefix = i << (8 - shard_key_bits - 1);
-        let start_key = split_start_key(table_name.as_bytes(), new_key_prefix);
-        let end_key = split_end_key(table_name.as_bytes(), new_key_prefix);
+        //let new_key_prefix = i << (8 - shard_key_bits - 1);
+        let shard_byte = i;
+        let start_key = split_start_key(table_name.as_bytes(), shard_byte);
+        //let end_key = split_end_key(table_name.as_bytes(), new_key_prefix);
 
         //println!("start_key: {:?}", start_key);
         //println!("end_key: {:?}", end_key);
 
-        let range = RangeInfo::new(&start_key, &end_key, 0);
+        let range = RangeInfo::new(&start_key, &start_key, 0);
         let res = split_and_scatter_region(range, Arc::clone(&client));
         match res {
             Ok(x) => println!("job {} runs {}", i, x),
