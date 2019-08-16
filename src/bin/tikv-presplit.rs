@@ -52,7 +52,7 @@ macro_rules! exec_with_retry {
 }
 
 pub fn split_start_key(table_key: &[u8], shard_byte: u8) -> Vec<u8> {
-    let mut v = Vec::with_capacity(1 + key.len());
+    let mut v = Vec::with_capacity(1 + table_key.len());
     v.extend_from_slice(table_key);
     v.push(shard_byte);
     v

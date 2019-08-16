@@ -185,7 +185,7 @@ fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
             end_key = iter_opt.upper_bound().as_ref().unwrap();
         }
     }
-    match keys::get_key_from_encoded_region_key(end_key) {
+    match keys::get_key_from_encoded_normal_key(end_key) {
         Ok(key) => iter_opt.set_vec_upper_bound(key),
         Err(err) => error!("error {}", err),
     }
@@ -266,7 +266,7 @@ impl RegionIterator {
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
         debug!("enter seek for key: {:?}", key);
         self.should_seekable(key)?;
-        match keys::get_key_from_encoded_region_key(key) {
+        match keys::get_key_from_encoded_normal_key(key) {
             Ok(new_key) => {
                 debug!("new key: {:?}", new_key);
                 if new_key == self.end_key {
@@ -286,7 +286,7 @@ impl RegionIterator {
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        match keys::get_key_from_encoded_region_key(key) {
+        match keys::get_key_from_encoded_normal_key(key) {
             Ok(new_key) => {
                 debug!("new key: {:?}", new_key);
                 self.valid = self.iter.seek_for_prev(new_key.as_slice().into());

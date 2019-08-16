@@ -1619,7 +1619,7 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let cf = match keys::get_cf_from_encoded_region_key(&key) {
+                            let cf = match keys::get_cf_from_encoded_region_start_key(&key) {
                                 Ok(t) => t,
                                 Err(err) => {
                                     error!("error: {}", err);
@@ -1741,7 +1741,7 @@ impl<E: Engine> Storage<E> {
                             let ranges_len = ranges.len();
                             for i in 0..ranges_len {
                                 let start_key = ranges[i].take_start_key();
-                                let cf = match keys::get_cf_from_encoded_region_key(&start_key) {
+                                let cf = match keys::get_cf_from_encoded_region_start_key(&start_key) {
                                     Ok(t) => t,
                                     Err(err) => {
                                         error!("error: {}", err);

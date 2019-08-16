@@ -437,25 +437,6 @@ pub fn roughly_cleanup_ranges(db: &DB, ranges: &[(Vec<u8>, Vec<u8>)]) -> Result<
     Ok(())
 }
 
-pub fn roughly_cleanup_ranges_cf(db: &DB, cf: &cf, ranges: &[(Vec<u8>, Vec<u8>)]) -> Result<()> {
-    let mut delete_ranges = Vec::new();
-    for &(ref start, ref end) in ranges {
-        if start == end {
-            continue;
-        }
-        assert!(start < end);
-        delete_ranges.push(Range::new(start, end));
-    }
-    if delete_ranges.is_empty() {
-        return Ok(());
-    }
-
-    let handle = get_cf_handle(db, cf)?;
-    db.delete_files_in_ranges_cf(handle, &delete_ranges, /* include_end */ false)?;
-
-    Ok(())
-}
-
 /// Compacts the column families in the specified range by manual or not.
 pub fn compact_range(
     db: &DB,
