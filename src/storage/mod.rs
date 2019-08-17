@@ -1619,13 +1619,8 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
-                            let cf = match keys::get_cf_from_encoded_region_start_key(&key) {
-                                Ok(t) => t,
-                                Err(err) => {
-                                    error!("error: {}", err);
-                                    return future::err(Error::InvalidCf(String::from("scanCf")));
-                                }
-                            };
+                            // client scan start key must be normal key
+                            let cf = keys::get_cf_from_encoded_region_start_key(&key);
                             debug!("scan cf: {}", cf);
 
                             let end_key = end_key.map(Key::from_encoded);
@@ -1741,15 +1736,7 @@ impl<E: Engine> Storage<E> {
                             let ranges_len = ranges.len();
                             for i in 0..ranges_len {
                                 let start_key = ranges[i].take_start_key();
-                                let cf = match keys::get_cf_from_encoded_region_start_key(&start_key) {
-                                    Ok(t) => t,
-                                    Err(err) => {
-                                        error!("error: {}", err);
-                                        return future::err(Error::InvalidCf(String::from(
-                                            "batchScanCf",
-                                        )));
-                                    }
-                                };
+                                let cf = keys::get_cf_from_encoded_region_start_key(&start_key);
                                 let start_key = Key::from_encoded(start_key);
                                 let end_key = ranges[i].take_end_key();
                                 let end_key = if end_key.is_empty() {

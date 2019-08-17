@@ -14,7 +14,8 @@ use super::{KeyEntry, ObserverContext, SplitChecker};
 
 pub use self::half::{get_region_approximate_middle, HalfCheckObserver};
 pub use self::keys::{
-    get_region_approximate_keys_txn,get_region_approximate_keys_raw,get_region_approximate_keys_cf, KeysCheckObserver,
+    get_region_approximate_keys_cf, get_region_approximate_keys_raw,
+    get_region_approximate_keys_txn, KeysCheckObserver,
 };
 pub use self::size::{
     get_region_approximate_size, get_region_approximate_size_cf, SizeCheckObserver,

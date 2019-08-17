@@ -1380,13 +1380,7 @@ pub fn do_snapshot(
             Some(state) => Ok(state),
         })?;
 
-    let cf = match keys::get_cf_from_encoded_region(state.get_region()) {
-        Ok(t) => t,
-        Err(err) => {
-            error!("error {}", err);
-            return Err(storage_error("could not get cf from region "));
-        }
-    };
+    let cf = keys::get_cf_from_encoded_region(state.get_region());
     debug!("do snapshot cf: {}", &cf);
 
     let key = SnapKey::new_with_cf(region_id, term, idx, cf);

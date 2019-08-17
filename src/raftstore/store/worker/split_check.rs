@@ -16,7 +16,7 @@ use kvproto::pdpb::CheckPolicy;
 use crate::raftstore::coprocessor::CoprocessorHost;
 use crate::raftstore::coprocessor::SplitCheckerHost;
 use crate::raftstore::store::{keys, Callback, CasualMessage, CasualRouter};
-use crate::raftstore::{Result, Error};
+use crate::raftstore::{Error, Result};
 use tikv_util::keybuilder::KeyBuilder;
 use tikv_util::worker::Runnable;
 
@@ -42,6 +42,10 @@ impl KeyEntry {
 
     pub fn key(&self) -> &[u8] {
         self.key.as_ref()
+    }
+
+    pub fn cf(&self) -> &str {
+        self.cf.as_ref()
     }
 
     pub fn is_commit_version(&self) -> bool {
@@ -93,7 +97,7 @@ impl<'a> MergedIterator<'a> {
                     iter.key().to_vec(),
                     pos,
                     iter.value().len(),
-                     cf.to_string(),
+                    cf.to_string(),
                 ));
             }
             iters.push((cf.to_string(), iter));
@@ -166,27 +170,9 @@ impl<S: CasualRouter> Runner<S> {
     fn check_split(&mut self, task: Task) {
         let region = &task.region;
         let region_id = region.get_id();
-        let start_key = match keys::get_start_key_from_encoded_region(region) {
-            Ok(t) => t,
-            Err(e) => {
-                error!("error: {}", e);
-                return
-            }
-        };
-        let end_key = match keys::get_end_key_from_encoded_region(region) {
-            Ok(t) => t,
-            Err(e) => {
-                error!("error: {}", e);
-                return
-            }
-        };
-        let cf = match keys::get_cf_from_encoded_region(region) {
-            Ok(t) => t,
-            Err(e) => {
-                error!("error: {}", e);
-                return
-            }
-        };
+        let start_key = keys::enc_start_key(region);
+        let end_key = keys::enc_end_key(region);
+        let cf = keys::get_cf_from_encoded_region(region);
 
         debug!(
             "executing task";
@@ -213,7 +199,7 @@ impl<S: CasualRouter> Runner<S> {
                 match self.scan_split_keys(&mut host, region, &start_key, &end_key) {
                     Ok(keys) => keys
                         .into_iter()
-                        .map(|k| keys::get_origin_key_of_region(&cf, &k).unwrap())
+                        .map(|k| keys::origin_key(&k, &cf))
                         .collect(),
                     Err(e) => {
                         error!("failed to scan split key"; "region_id" => region_id, "err" => %e);
@@ -224,7 +210,7 @@ impl<S: CasualRouter> Runner<S> {
             CheckPolicy::APPROXIMATE => match host.approximate_split_keys(region, &self.engine) {
                 Ok(keys) => keys
                     .into_iter()
-                    .map(|k| keys::origin_key(&k).to_vec())
+                    .map(|k| keys::origin_key(&k, &cf).to_vec())
                     .collect(),
                 Err(e) => {
                     error!(
@@ -273,14 +259,7 @@ impl<S: CasualRouter> Runner<S> {
         end_key: &[u8],
     ) -> Result<Vec<Vec<u8>>> {
         let timer = CHECK_SPILT_HISTOGRAM.start_coarse_timer();
-        let cf = match keys::get_cf_from_encoded_region(region) {
-            Ok(t) => t,
-            Err(e) => {
-                error!("error: {}", e);
-                return Err(Error::Key(String::from("get cf from region error")))
-            }
-        };
-
+        let cf = keys::get_cf_from_encoded_region(region);
         let cfs = vec![cf];
         MergedIterator::new(self.engine.as_ref(), &cfs, start_key, end_key, false).map(
             |mut iter| {

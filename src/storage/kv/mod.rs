@@ -144,7 +144,8 @@ pub trait Iterator: Send {
         Ok(())
     }
 
-    fn key(&self) -> &[u8];
+    fn key(&self) -> Vec<u8>;
+    fn mvcc_key(&self) -> &[u8];
     fn value(&self) -> &[u8];
 }
 
@@ -363,7 +364,7 @@ impl<I: Iterator> Cursor<I> {
 
         if self.scan_mode == ScanMode::Forward
             && self.valid()?
-            && self.key(statistics) >= key.as_encoded().as_slice()
+            && self.key(statistics).as_slice() >= key.as_encoded().as_slice()
         {
             return Ok(true);
         }
@@ -402,12 +403,13 @@ impl<I: Iterator> Cursor<I> {
         }
         if ord == Ordering::Greater {
             near_loop!(
-                self.prev(statistics) && self.key(statistics) > key.as_encoded().as_slice(),
+                self.prev(statistics)
+                    && self.key(statistics).as_slice() > key.as_encoded().as_slice(),
                 self.seek(key, statistics),
                 statistics
             );
             if self.valid()? {
-                if self.key(statistics) < key.as_encoded().as_slice() {
+                if self.key(statistics).as_slice() < key.as_encoded().as_slice() {
                     self.next(statistics);
                 }
             } else {
@@ -417,7 +419,8 @@ impl<I: Iterator> Cursor<I> {
         } else {
             // ord == Less
             near_loop!(
-                self.next(statistics) && self.key(statistics) < key.as_encoded().as_slice(),
+                self.next(statistics)
+                    && self.key(statistics).as_slice() < key.as_encoded().as_slice(),
                 self.seek(key, statistics),
                 statistics
             );
@@ -460,7 +463,7 @@ impl<I: Iterator> Cursor<I> {
 
         if self.scan_mode == ScanMode::Backward
             && self.valid()?
-            && self.key(statistics) <= key.as_encoded().as_slice()
+            && self.key(statistics).as_slice() <= key.as_encoded().as_slice()
         {
             return Ok(true);
         }
@@ -495,12 +498,13 @@ impl<I: Iterator> Cursor<I> {
 
         if ord == Ordering::Less {
             near_loop!(
-                self.next(statistics) && self.key(statistics) < key.as_encoded().as_slice(),
+                self.next(statistics)
+                    && self.key(statistics).as_slice() < key.as_encoded().as_slice(),
                 self.seek_for_prev(key, statistics),
                 statistics
             );
             if self.valid()? {
-                if self.key(statistics) > key.as_encoded().as_slice() {
+                if self.key(statistics).as_slice() > key.as_encoded().as_slice() {
                     self.prev(statistics);
                 }
             } else {
@@ -509,7 +513,8 @@ impl<I: Iterator> Cursor<I> {
             }
         } else {
             near_loop!(
-                self.prev(statistics) && self.key(statistics) > key.as_encoded().as_slice(),
+                self.prev(statistics)
+                    && self.key(statistics).as_slice() > key.as_encoded().as_slice(),
                 self.seek_for_prev(key, statistics),
                 statistics
             );
@@ -553,9 +558,21 @@ impl<I: Iterator> Cursor<I> {
     }
 
     #[inline]
-    pub fn key(&self, statistics: &mut CFStatistics) -> &[u8] {
+    pub fn key(&self, statistics: &mut CFStatistics) -> Vec<u8> {
         info!("enter cursor key");
         let key = self.iter.key();
+        info!("key: {:?}", key);
+        if !self.mark_key_read() {
+            statistics.flow_stats.read_bytes += key.len();
+            statistics.flow_stats.read_keys += 1;
+        }
+        key
+    }
+
+    #[inline]
+    pub fn mvcc_key(&self, statistics: &mut CFStatistics) -> &[u8] {
+        info!("enter cursor key");
+        let key = self.iter.mvcc_key();
         info!("key: {:?}", key);
         if !self.mark_key_read() {
             statistics.flow_stats.read_bytes += key.len();

@@ -469,8 +469,12 @@ impl EngineIterator for RegionIterator {
         self.should_seekable(key.as_encoded()).map_err(From::from)
     }
 
-    fn key(&self) -> &[u8] {
+    fn key(&self) -> Vec<u8> {
         RegionIterator::key(self)
+    }
+
+    fn mvcc_key(&self) -> &[u8] {
+        RegionIterator::mvcc_key(self)
     }
 
     fn value(&self) -> &[u8] {

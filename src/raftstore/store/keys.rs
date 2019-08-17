@@ -194,13 +194,15 @@ pub fn validate_data_key(key: &[u8]) -> bool {
 }
 
 pub fn data_key(key: &[u8]) -> Vec<u8> {
-    let mut v = Vec::with_capacity(DATA_PREFIX_KEY.len() + key.len());
-    v.extend_from_slice(DATA_PREFIX_KEY);
-    v.extend_from_slice(key);
-    v
+    let key_len = key.len();
+    assert!(key_len >= TABLE_LEN);
+    let mut new_key = Vec::with_capacity(DATA_PREFIX_KEY.len() + key_len - TABLE_LEN);
+    new_key.push(DATA_PREFIX);
+    new_key.extend_from_slice(&key[TABLE_LEN..]);
+    new_key
 }
 
-pub fn origin_key(key: &[u8]) -> &[u8] {
+pub fn mvcc_origin_key(key: &[u8]) -> &[u8] {
     assert!(
         validate_data_key(key),
         "invalid data key {}",
@@ -209,9 +211,16 @@ pub fn origin_key(key: &[u8]) -> &[u8] {
     &key[DATA_PREFIX_KEY.len()..]
 }
 
-/// is old region or not
-pub fn is_raw_region(_region: &Region) -> bool {
-    true
+pub fn origin_key(key: &[u8], cf: &str) -> Vec<u8> {
+    assert!(
+        validate_data_key(key),
+        "invalid data key {}",
+        hex::encode_upper(key)
+    );
+    let mut origin_key = Vec::with_capacity(cf.len() + key.len() - 1);
+    origin_key.extend_from_slice(cf.as_bytes());
+    origin_key.extend_from_slice(&key[1..]);
+    origin_key
 }
 
 /// Get the `start_key` of current region in encoded form.
@@ -219,7 +228,12 @@ pub fn enc_start_key(region: &Region) -> Vec<u8> {
     // only initialized region's start_key can be encoded, otherwise there must be bugs
     // somewhere.
     assert!(!region.get_peers().is_empty());
-    data_key(region.get_start_key())
+    let region_start_key = region.get_start_key();
+    if region_start_key.is_empty() {
+        DATA_MAX_KEY.to_vec()
+    } else {
+        data_key(region_start_key)
+    }
 }
 
 /// Get the `end_key` of current region in encoded form.
@@ -227,10 +241,14 @@ pub fn enc_end_key(region: &Region) -> Vec<u8> {
     // only initialized region's end_key can be encoded, otherwise there must be bugs
     // somewhere.
     assert!(!region.get_peers().is_empty());
-    data_end_key(region.get_end_key())
+    let region_end_key = region.get_end_key();
+    if region_end_key.is_empty() {
+        DATA_MAX_KEY.to_vec()
+    } else {
+        data_key(region_end_key)
+    }
 }
 
-#[inline]
 pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     if region_end_key.is_empty() {
         DATA_MAX_KEY.to_vec()
@@ -239,93 +257,33 @@ pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     }
 }
 
-pub fn get_cf_from_encoded_region_start_key(
-    encoded_key: &[u8],
-) -> std::result::Result<String, &str> {
-    let key_len = encoded_key.len();
-    if key_len < TABLE_LEN {
-        return Err("Key length is less than four");
-    }
-    let cf = String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap();
-    Ok(cf)
+/// is old region or not
+pub fn is_raw_region(_region: &Region) -> bool {
+    true
 }
 
-pub fn get_cf_and_key_from_encoded_normal_key(
-    encoded_key: &[u8],
-) -> std::result::Result<(String, Vec<u8>), &str> {
-    let key_len = encoded_key.len();
-    if key_len < TABLE_LEN {
-        return Err("Key length is less than four");
-    }
-    let cf = String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap();
-    let key = data_key(&encoded_key[TABLE_LEN..]);
-    Ok((cf, key))
+pub fn get_cf_from_encoded_region_start_key(encoded_key: &[u8]) -> String {
+    assert!(encoded_key.len() >= TABLE_LEN);
+    String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap()
 }
 
-pub fn get_cf_from_encoded_region(region: &Region) -> std::result::Result<String, &str> {
+pub fn get_cf_and_key_from_encoded_normal_key(encoded_key: &[u8]) -> (String, Vec<u8>) {
+    assert!(encoded_key.len() >= TABLE_LEN);
+    let cf = String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap();
+    let key = data_key(encoded_key);
+    (cf, key)
+}
+
+pub fn get_cf_from_encoded_region(region: &Region) -> String {
     assert!(!region.get_peers().is_empty());
     let region_start_key = region.get_start_key();
     if region_start_key.is_empty() {
         // let the last not-used region to mapped to default cf
-        Ok("default".to_string())
+        "default".to_string()
     } else {
-        if region_start_key.len() < TABLE_LEN {
-            Err("region start key is wrong format")
-        } else {
-            Ok(String::from_utf8(region_start_key[0..TABLE_LEN].to_vec()).unwrap())
-        }
+        assert!(region_start_key.len() >= TABLE_LEN);
+        String::from_utf8(region_start_key[0..TABLE_LEN].to_vec()).unwrap()
     }
-}
-
-pub fn get_key_from_encoded_normal_key(normal_key: &[u8]) -> std::result::Result<Vec<u8>, &str> {
-    let key_len = normal_key.len();
-    if key_len < TABLE_LEN {
-        return Err("region normal key length is less than four");
-    }
-
-    let mut key =
-        Vec::with_capacity(DATA_PREFIX_KEY.len() + key_len - TABLE_LEN);
-    key.push(DATA_PREFIX);
-    key.extend_from_slice(&normal_key[TABLE_LEN..]);
-    Ok(key)
-}
-
-pub fn get_start_key_from_encoded_region(region: &Region) -> std::result::Result<Vec<u8>, &str> {
-    assert!(!region.get_peers().is_empty());
-    let region_start_key = region.get_start_key();
-    if region_start_key.is_empty() {
-        Ok(DATA_MIN_KEY.to_vec())
-    } else {
-        if region_start_key.len() < TABLE_LEN {
-            Err("region start key is wrong format")
-        } else {
-            Ok(data_key(&region_start_key[TABLE_LEN..]))
-        }
-    }
-}
-
-pub fn get_end_key_from_encoded_region(region: &Region) -> std::result::Result<Vec<u8>, &str> {
-    assert!(!region.get_peers().is_empty());
-    let region_end_key = region.get_end_key();
-    if region_end_key.is_empty() {
-        Ok(DATA_MAX_KEY.to_vec())
-    } else {
-        if region_end_key.len() < TABLE_LEN {
-            Err("region end key is wrong format")
-        } else {
-            Ok(data_key(&region_end_key[TABLE_LEN..]))
-        }
-    }
-}
-
-pub fn get_origin_key_of_region<'a, 'b>(cf: &'a str, rocks_key: &[u8]) -> std::result::Result<Vec<u8>, &'b str> {
-    if rocks_key.len() < 1 {
-        return Err("rocks key is wrong format");
-    }
-    let mut origin_key = Vec::with_capacity(cf.len() + rocks_key.len() - 1 );
-    origin_key.extend_from_slice(cf.as_bytes());
-    origin_key.extend_from_slice(&rocks_key[1..]);
-    return Ok(origin_key)
 }
 
 #[cfg(test)]
@@ -480,21 +438,30 @@ mod tests {
             get_cf_and_key_from_encoded_normal_key(b"2table:raw_key").unwrap(),
             (String::from("table"), b"z2raw_key".to_vec())
         );
-        assert_eq!(get_origin_key_of_region("table", b"z2raw_key").unwrap(), b"2table:raw_key".to_vec());
+        assert_eq!(
+            get_origin_key_of_region("table", b"z2raw_key").unwrap(),
+            b"2table:raw_key".to_vec()
+        );
 
         // rawKey is null
         assert_eq!(
             get_cf_and_key_from_encoded_normal_key(b"0table:").unwrap(),
             (String::from("table"), vec![b'z', b'0'])
         );
-        assert_eq!(get_origin_key_of_region("table",b"z0").unwrap(), b"0table:".to_vec());
+        assert_eq!(
+            get_origin_key_of_region("table", b"z0").unwrap(),
+            b"0table:".to_vec()
+        );
 
         // shardKey is colon
         assert_eq!(
             get_cf_and_key_from_encoded_normal_key(b":table:key").unwrap(),
             (String::from("table"), b"z:key".to_vec())
         );
-        assert_eq!(get_origin_key_of_region("table", b"z:key").unwrap(), b":table:key".to_vec());
+        assert_eq!(
+            get_origin_key_of_region("table", b"z:key").unwrap(),
+            b":table:key".to_vec()
+        );
 
         // len < 4
         assert!(get_cf_and_key_from_encoded_normal_key(b"0t:").is_err());
@@ -502,7 +469,10 @@ mod tests {
         assert!(get_cf_and_key_from_encoded_normal_key(b"0ttttt").is_err());
 
         // for rocks_key len == 2 & len < 2
-        assert_eq!(get_origin_key_of_region("table", b"z0").unwrap(), b"0table:".to_vec());
+        assert_eq!(
+            get_origin_key_of_region("table", b"z0").unwrap(),
+            b"0table:".to_vec()
+        );
         assert!(get_origin_key_of_region("table", b"z").is_err());
     }
 

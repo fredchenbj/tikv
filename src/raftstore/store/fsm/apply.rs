@@ -1154,38 +1154,34 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
-            Ok((cf, key)) => {
-                self.metrics.size_diff_hint += key.len() as i64;
-                self.metrics.size_diff_hint += value.len() as i64;
-
-                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
-                    let _ = rocks::util::create_cf_handle_with_option(
-                        &ctx.engines.kv,
-                        &cf,
-                        config::get_raw_cf_option(),
-                    );
-                    info!("put create cf: {}", cf);
-                }
-                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
-                    .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "{} failed to write ({}, {}) to cf {}: {:?}",
-                            self.tag,
-                            hex::encode_upper(&key),
-                            escape(value),
-                            cf,
-                            e
-                        )
-                    });
-                return Ok(resp);
-            }
-            Err(err) => {
-                error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle put error")));
-            }
+        if !req.get_put().get_cf().is_empty() {
+            debug!("verify handle put cf: {}", req.get_put().get_cf());
         }
+        let (cf, key) = keys::get_cf_and_key_from_encoded_normal_key(encoded_key);
+        self.metrics.size_diff_hint += key.len() as i64;
+        self.metrics.size_diff_hint += value.len() as i64;
+
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            let _ = rocks::util::create_cf_handle_with_option(
+                &ctx.engines.kv,
+                &cf,
+                config::get_raw_cf_option(),
+            );
+            info!("put create cf: {}", cf);
+        }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| ctx.kv_wb().put_cf(handle, &key, value).map_err(Into::into))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{} failed to write ({}, {}) to cf {}: {:?}",
+                    self.tag,
+                    hex::encode_upper(&key),
+                    escape(value),
+                    cf,
+                    e
+                )
+            });
+        Ok(resp)
     }
 
     fn handle_update(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
@@ -1194,42 +1190,35 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
-            Ok((cf, key)) => {
-                self.metrics.size_diff_hint += key.len() as i64;
-                self.metrics.size_diff_hint += value.len() as i64;
+        let (cf, key) = keys::get_cf_and_key_from_encoded_normal_key(encoded_key);
+        self.metrics.size_diff_hint += key.len() as i64;
+        self.metrics.size_diff_hint += value.len() as i64;
 
-                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
-                    let _ = rocks::util::create_cf_handle_with_option(
-                        &ctx.engines.kv,
-                        &cf,
-                        config::get_raw_cf_option(),
-                    );
-                    info!("update create cf: {}", cf);
-                }
-                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
-                    .and_then(|handle| {
-                        ctx.kv_wb()
-                            .merge_cf(handle, &key, value)
-                            .map_err(Into::into)
-                    }) // to modify
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "{} failed to merge ({}, {}) to cf {}: {:?}",
-                            self.tag,
-                            escape(&key),
-                            escape(value),
-                            cf,
-                            e
-                        )
-                    });
-                return Ok(resp);
-            }
-            Err(err) => {
-                error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle update error")));
-            }
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            let _ = rocks::util::create_cf_handle_with_option(
+                &ctx.engines.kv,
+                &cf,
+                config::get_raw_cf_option(),
+            );
+            info!("update create cf: {}", cf);
         }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| {
+                ctx.kv_wb()
+                    .merge_cf(handle, &key, value)
+                    .map_err(Into::into)
+            }) // to modify
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{} failed to merge ({}, {}) to cf {}: {:?}",
+                    self.tag,
+                    escape(&key),
+                    escape(value),
+                    cf,
+                    e
+                )
+            });
+        Ok(resp)
     }
 
     fn handle_delete(&mut self, ctx: &ApplyContext, req: &Request) -> Result<Response> {
@@ -1238,31 +1227,24 @@ impl ApplyDelegate {
         util::check_key_in_region(encoded_key, &self.region)?;
 
         let resp = Response::new();
-        match keys::get_cf_and_key_from_encoded_normal_key(encoded_key) {
-            Ok((cf, key)) => {
-                self.metrics.size_diff_hint -= key.len() as i64;
-                if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
-                    error!("key: {:?} don't have cf: {}", encoded_key, cf);
-                    return Err(Error::Key(String::from("handle delete error")));
-                }
-                rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
-                    .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "{} failed to delete {}: {}",
-                            self.tag,
-                            hex::encode_upper(&key),
-                            e
-                        )
-                    });
-                self.metrics.delete_keys_hint += 1;
-                return Ok(resp);
-            }
-            Err(err) => {
-                error!("key: {:?}, error: {}", encoded_key, err);
-                return Err(Error::Key(String::from("handle delete error")));
-            }
+        let (cf, key) = keys::get_cf_and_key_from_encoded_normal_key(encoded_key);
+        self.metrics.size_diff_hint -= key.len() as i64;
+        if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
+            error!("key: {:?} don't have cf: {}", encoded_key, cf);
+            return Err(Error::Key(String::from("handle delete error")));
         }
+        rocks::util::get_cf_handle(&ctx.engines.kv, &cf)
+            .and_then(|handle| ctx.kv_wb().delete_cf(handle, &key).map_err(Into::into))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{} failed to delete {}: {}",
+                    self.tag,
+                    hex::encode_upper(&key),
+                    e
+                )
+            });
+        self.metrics.delete_keys_hint += 1;
+        Ok(resp)
     }
 
     fn handle_delete_range(

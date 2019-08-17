@@ -168,7 +168,7 @@ impl<S: Snapshot> MvccReader<S> {
         if !ok {
             return Ok(None);
         }
-        let write_key = cursor.key(&mut self.statistics.write);
+        let write_key = cursor.mvcc_key(&mut self.statistics.write);
         let commit_ts = Key::decode_ts_from(write_key)?;
         if !Key::is_user_key_eq(write_key, key.as_encoded()) {
             return Ok(None);
@@ -363,7 +363,7 @@ impl<S: Snapshot> MvccReader<S> {
         }
         let mut locks = Vec::with_capacity(limit);
         while cursor.valid()? {
-            let key = Key::from_encoded_slice(cursor.key(&mut self.statistics.lock));
+            let key = Key::from_encoded_slice(cursor.mvcc_key(&mut self.statistics.lock));
             let lock = Lock::parse(cursor.value(&mut self.statistics.lock))?;
             if filter(&lock) {
                 locks.push((key, lock));
@@ -416,7 +416,7 @@ impl<S: Snapshot> MvccReader<S> {
         }
         let mut v = vec![];
         while ok {
-            let cur_key = cursor.key(&mut self.statistics.data);
+            let cur_key = cursor.mvcc_key(&mut self.statistics.data);
             let ts = Key::decode_ts_from(cur_key)?;
             if Key::is_user_key_eq(cur_key, key.as_encoded()) {
                 v.push((ts, cursor.value(&mut self.statistics.data).to_vec()));

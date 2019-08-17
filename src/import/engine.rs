@@ -151,8 +151,8 @@ impl LazySSTInfo {
     fn new(env: Arc<Env>, info: ExternalSstFileInfo, cf_name: &'static str) -> Self {
         // This range doesn't contain the data prefix, like the region range.
         let mut range = Range::new();
-        range.set_start(keys::origin_key(info.smallest_key()).to_owned());
-        range.set_end(keys::origin_key(info.largest_key()).to_owned());
+        range.set_start(keys::origin_key(info.smallest_key(), cf_name).to_owned());
+        range.set_end(keys::origin_key(info.largest_key(), cf_name).to_owned());
 
         Self {
             env,

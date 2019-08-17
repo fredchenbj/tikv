@@ -20,7 +20,9 @@ use raft::eraftpb::ConfChangeType;
 
 use super::metrics::*;
 use crate::pd::{Error, PdClient, RegionStat};
-use crate::raftstore::coprocessor::{get_region_approximate_keys_txn, get_region_approximate_keys_raw, get_region_approximate_size};
+use crate::raftstore::coprocessor::{
+    get_region_approximate_keys_raw, get_region_approximate_keys_txn, get_region_approximate_size,
+};
 use crate::raftstore::store::cmd_resp::new_error;
 use crate::raftstore::store::util::is_epoch_stale;
 use crate::raftstore::store::util::KeysInfoFormatter;

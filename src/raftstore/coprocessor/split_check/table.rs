@@ -34,7 +34,8 @@ impl SplitChecker for Checker {
             return true;
         }
 
-        let current_encoded_key = keys::origin_key(entry.key());
+        let current_encoded_key = keys::origin_key(entry.key(), entry.cf());
+        let current_encoded_key = current_encoded_key.as_slice();
 
         let split_key = if self.first_encoded_table_prefix.is_some() {
             if !is_same_table(
@@ -101,7 +102,9 @@ impl SplitCheckObserver for TableCheckObserver {
         };
 
         let encoded_start_key = region.get_start_key();
-        let encoded_end_key = keys::origin_key(&end_key);
+        let cf = keys::get_cf_from_encoded_region(region);
+        let encoded_end_key = keys::origin_key(&end_key, &cf);
+        let encoded_end_key = encoded_end_key.as_slice();
 
         if encoded_start_key.len() < table_codec::TABLE_PREFIX_KEY_LEN
             || encoded_end_key.len() < table_codec::TABLE_PREFIX_KEY_LEN

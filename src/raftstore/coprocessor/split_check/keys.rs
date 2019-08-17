@@ -197,30 +197,13 @@ pub fn get_region_approximate_keys_txn(db: &DB, region: &Region) -> Result<u64> 
 /// Get the approximate number of keys in the range.
 pub fn get_region_approximate_keys_raw(db: &DB, region: &Region) -> Result<u64> {
     debug!("enter get region approximate keys");
-    match keys::get_cf_from_encoded_region(&region) {
-        Ok(cf) => Ok(get_region_approximate_keys_cf(db, &cf, &region)?),
-        Err(err) => {
-            error!("error: {}", err);
-            return Err(box_err!("get cf from region error"));
-        }
-    }
+    let cf = keys::get_cf_from_encoded_region(&region);
+    Ok(get_region_approximate_keys_cf(db, &cf, &region)?)
 }
 
 pub fn get_region_approximate_keys_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
-    let start_key = match keys::get_start_key_from_encoded_region(&region) {
-        Ok(t) => t,
-        Err(err) => {
-            error!("error: {}", err);
-            return Err(box_err!("get start key from region error"));
-        },
-    };
-    let end_key = match keys::get_end_key_from_encoded_region(&region) {
-        Ok(t) => t,
-        Err(err) => {
-            error!("error: {}", err);
-            return Err(box_err!("get end key from region error"));
-        },
-    };
+    let start_key = keys::enc_start_key(&region);
+    let end_key = keys::enc_end_key(&region);
     let cf = box_try!(rocks::util::get_cf_handle(db, cfname));
     let range = Range::new(&start_key, &end_key);
     let (mut keys, _) = db.get_approximate_memtable_stats_cf(cf, &range);

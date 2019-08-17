@@ -198,7 +198,12 @@ impl Iterator for BTreeEngineIterator {
         Ok(())
     }
 
-    fn key(&self) -> &[u8] {
+    fn key(&self) -> Vec<u8> {
+        assert!(self.valid());
+        self.cur_key.as_ref().unwrap().clone().into_encoded()
+    }
+
+    fn mvcc_key(&self) -> &[u8] {
         assert!(self.valid());
         self.cur_key.as_ref().unwrap().as_encoded()
     }

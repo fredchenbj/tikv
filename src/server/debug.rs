@@ -406,7 +406,7 @@ impl Debugger {
 
         v1!("Calculating split keys...");
         let split_keys = divide_db(&db, threads).unwrap().into_iter().map(|k| {
-            let k = Key::from_encoded(keys::origin_key(&k).to_vec())
+            let k = Key::from_encoded(keys::mvcc_origin_key(&k).to_vec())
                 .truncate_ts()
                 .unwrap();
             k.as_encoded().clone()
@@ -828,9 +828,11 @@ impl Debugger {
             mvcc_properties.add(&mvcc);
         }
 
+        let cf = keys::get_cf_from_encoded_region(&region);
         let middle_key = match box_try!(get_region_approximate_middle(db, &region)) {
             Some(data_key) => {
-                let mut key = keys::origin_key(&data_key);
+                let key = keys::origin_key(&data_key, &cf);
+                let mut key = key.as_slice();
                 box_try!(bytes::decode_bytes(&mut key, false))
             }
             None => Vec::new(),
@@ -945,7 +947,7 @@ impl MvccChecker {
 
     fn min_key(key: Option<Vec<u8>>, iter: &DBIterator, f: fn(&[u8]) -> &[u8]) -> Option<Vec<u8>> {
         let iter_key = if iter.valid() {
-            Some(f(keys::origin_key(iter.key())).to_vec())
+            Some(f(keys::mvcc_origin_key(iter.key())).to_vec())
         } else {
             None
         };
@@ -1106,7 +1108,7 @@ impl MvccChecker {
     }
 
     fn next_lock(&mut self, key: &[u8]) -> Result<Option<Lock>> {
-        if self.lock_iter.valid() && keys::origin_key(self.lock_iter.key()) == key {
+        if self.lock_iter.valid() && keys::mvcc_origin_key(self.lock_iter.key()) == key {
             let lock = box_try!(Lock::parse(self.lock_iter.value()));
             self.lock_iter.next();
             return Ok(Some(lock));
@@ -1116,11 +1118,11 @@ impl MvccChecker {
 
     fn next_default(&mut self, key: &[u8]) -> Result<Option<u64>> {
         if self.default_iter.valid()
-            && box_try!(Key::truncate_ts_for(keys::origin_key(
+            && box_try!(Key::truncate_ts_for(keys::mvcc_origin_key(
                 self.default_iter.key()
             ))) == key
         {
-            let start_ts = box_try!(Key::decode_ts_from(keys::origin_key(
+            let start_ts = box_try!(Key::decode_ts_from(keys::mvcc_origin_key(
                 self.default_iter.key()
             )));
             self.default_iter.next();
@@ -1131,12 +1133,14 @@ impl MvccChecker {
 
     fn next_write(&mut self, key: &[u8]) -> Result<Option<(u64, Write)>> {
         if self.write_iter.valid()
-            && box_try!(Key::truncate_ts_for(keys::origin_key(
+            && box_try!(Key::truncate_ts_for(keys::mvcc_origin_key(
                 self.write_iter.key()
             ))) == key
         {
             let write = box_try!(Write::parse(self.write_iter.value()));
-            let commit_ts = box_try!(Key::decode_ts_from(keys::origin_key(self.write_iter.key())));
+            let commit_ts = box_try!(Key::decode_ts_from(keys::mvcc_origin_key(
+                self.write_iter.key()
+            )));
             self.write_iter.next();
             return Ok(Some((commit_ts, write)));
         }
@@ -1225,7 +1229,7 @@ impl MvccInfoIterator {
             let mut values = Vec::with_capacity(vec_kv.len());
             for (key, value) in vec_kv {
                 let mut value_info = MvccValue::default();
-                let start_ts = box_try!(Key::decode_ts_from(keys::origin_key(&key)));
+                let start_ts = box_try!(Key::decode_ts_from(keys::mvcc_origin_key(&key)));
                 value_info.set_start_ts(start_ts);
                 value_info.set_value(value);
                 values.push(value_info);
@@ -1248,7 +1252,7 @@ impl MvccInfoIterator {
                     WriteType::Rollback => write_info.set_field_type(Op::Rollback),
                 }
                 write_info.set_start_ts(write.start_ts);
-                let commit_ts = box_try!(Key::decode_ts_from(keys::origin_key(&key)));
+                let commit_ts = box_try!(Key::decode_ts_from(keys::mvcc_origin_key(&key)));
                 write_info.set_commit_ts(commit_ts);
                 write_info.set_short_value(write.short_value.unwrap_or_default());
                 writes.push(write_info);

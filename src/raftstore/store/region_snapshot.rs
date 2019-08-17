@@ -95,7 +95,7 @@ impl RegionSnapshot {
             return Ok(());
         }
         while it.valid() {
-            let r = f(it.key(), it.value())?;
+            let r = f(&it.key(), it.value())?;
 
             if !r || !it.next() {
                 break;
@@ -150,13 +150,8 @@ impl Peekable for RegionSnapshot {
             self.region.get_end_key(),
         )?;
 
-        match keys::get_cf_and_key_from_encoded_normal_key(key) {
-            Ok((cf, data_key)) => self.snap.get_value_cf(&cf, &data_key),
-            Err(err) => {
-                error!("{}", err);
-                Err(EngineError::RocksDb("get cf and key error".into()))
-            }
-        }
+        let (cf, data_key) = keys::get_cf_and_key_from_encoded_normal_key(key);
+        self.snap.get_value_cf(&cf, &data_key)
     }
 }
 
@@ -172,10 +167,8 @@ pub struct RegionIterator {
 }
 
 fn update_lower_bound(iter_opt: &mut IterOption, region: &Region) {
-    match keys::get_start_key_from_encoded_region(region) {
-        Ok(key) => iter_opt.set_vec_lower_bound(key),
-        Err(err) => error!("error {}", err),
-    }
+    let start_key = keys::enc_start_key(region);
+    iter_opt.set_vec_lower_bound(start_key);
 }
 
 fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
@@ -185,10 +178,8 @@ fn update_upper_bound(iter_opt: &mut IterOption, region: &Region) {
             end_key = iter_opt.upper_bound().as_ref().unwrap();
         }
     }
-    match keys::get_key_from_encoded_normal_key(end_key) {
-        Ok(key) => iter_opt.set_vec_upper_bound(key),
-        Err(err) => error!("error {}", err),
-    }
+    let end_key = keys::data_key(end_key);
+    iter_opt.set_vec_upper_bound(end_key);
 }
 
 // we use engine::rocks's style iterator, doesn't need to impl std iterator.
@@ -266,40 +257,26 @@ impl RegionIterator {
     pub fn seek(&mut self, key: &[u8]) -> Result<bool> {
         debug!("enter seek for key: {:?}", key);
         self.should_seekable(key)?;
-        match keys::get_key_from_encoded_normal_key(key) {
-            Ok(new_key) => {
-                debug!("new key: {:?}", new_key);
-                if new_key == self.end_key {
-                    self.valid = false;
-                } else {
-                    self.valid = self.iter.seek(new_key.as_slice().into());
-                }
-
-                Ok(self.update_valid(true))
-            }
-            Err(err) => {
-                error!("seek key: {:?}, error: {}", key, err);
-                Err(Error::Key(String::from("seek key error")))
-            }
+        let key = keys::data_key(key);
+        debug!("new key: {:?}", key);
+        if key == self.end_key {
+            self.valid = false;
+        } else {
+            self.valid = self.iter.seek(key.as_slice().into());
         }
+
+        Ok(self.update_valid(true))
     }
 
     pub fn seek_for_prev(&mut self, key: &[u8]) -> Result<bool> {
         self.should_seekable(key)?;
-        match keys::get_key_from_encoded_normal_key(key) {
-            Ok(new_key) => {
-                debug!("new key: {:?}", new_key);
-                self.valid = self.iter.seek_for_prev(new_key.as_slice().into());
-                if self.valid && self.iter.key() == self.end_key.as_slice() {
-                    self.valid = self.iter.prev();
-                }
-                Ok(self.update_valid(false))
-            }
-            Err(err) => {
-                error!("seek pre key: {:?}, error: {}", key, err);
-                Err(Error::Key(String::from("seek pre key error")))
-            }
+        let key = keys::data_key(key);
+        debug!("new key: {:?}", key);
+        self.valid = self.iter.seek_for_prev(key.as_slice().into());
+        if self.valid && self.iter.key() == self.end_key.as_slice() {
+            self.valid = self.iter.prev();
         }
+        Ok(self.update_valid(false))
     }
 
     pub fn prev(&mut self) -> bool {
@@ -322,9 +299,15 @@ impl RegionIterator {
 
     #[inline]
     // scan get the key and value, the key is "[z]+[shardByte]+[RawKey]"
-    pub fn key(&self) -> &[u8] {
+    pub fn key(&self) -> Vec<u8> {
         assert!(self.valid);
-        keys::origin_key(self.iter.key())
+        let cf = keys::get_cf_from_encoded_region(&self.region);
+        keys::origin_key(self.iter.key(), &cf)
+    }
+
+    pub fn mvcc_key(&self) -> &[u8] {
+        assert!(self.valid);
+        keys::mvcc_origin_key(self.iter.key())
     }
 
     #[inline]

@@ -346,7 +346,11 @@ impl<D: Deref<Target = DB> + Send> EngineIterator for DBIterator<D> {
             .map_err(From::from)
     }
 
-    fn key(&self) -> &[u8] {
+    fn key(&self) -> Vec<u8> {
+        DBIterator::key(self).to_vec()
+    }
+
+    fn mvcc_key(&self) -> &[u8] {
         DBIterator::key(self)
     }
 

@@ -149,14 +149,7 @@ impl SnapKey {
         }
 
         let region = snap_data.get_region();
-        let cf = match keys::get_cf_from_encoded_region(&region) {
-            Ok(t) => t,
-            Err(err) => {
-                error!("error: {}", err);
-                return Err(io::Error::new(ErrorKind::Other, "from snap error"));
-            }
-        };
-
+        let cf = keys::get_cf_from_encoded_region(&region);
         Ok(SnapKey::from_region_snap(region.get_id(), snap, cf))
     }
 }
@@ -773,25 +766,7 @@ impl Snap {
         let mut snap_key_count = 0;
         let is_raw = is_raw_region(region);
         let (begin_key, end_key) = if is_raw {
-            let key1 = match keys::get_start_key_from_encoded_region(region) {
-                Ok(t) => t,
-                Err(err) => {
-                    error!("error {}", err);
-                    return Err(RaftStoreError::Other(From::from(
-                        "get start key from region error".to_string(),
-                    )));
-                }
-            };
-            let key2 = match keys::get_end_key_from_encoded_region(region) {
-                Ok(t) => t,
-                Err(err) => {
-                    error!("error {}", err);
-                    return Err(RaftStoreError::Other(From::from(
-                        "get end key from region error".to_string(),
-                    )));
-                }
-            };
-            (key1, key2)
+            (enc_start_key(region), enc_end_key(region))
         } else {
             (enc_start_key(region), enc_end_key(region))
         };
@@ -800,15 +775,7 @@ impl Snap {
         let cf_vec;
         let raw_cf;
         if is_raw {
-            raw_cf = match keys::get_cf_from_encoded_region(region) {
-                Ok(t) => t,
-                Err(err) => {
-                    error!("error {}", err);
-                    return Err(RaftStoreError::Other(From::from(
-                        "get cf from region error".to_string(),
-                    )));
-                }
-            };
+            raw_cf = keys::get_cf_from_encoded_region(region);
             cf_vec = vec![raw_cf.as_str()];
             cfs = cf_vec.as_slice();
         //self.cf_files.clear();
@@ -923,6 +890,7 @@ fn apply_plain_cf_file<D: CompactBytesFromFileDecoder>(
 ) -> Result<()> {
     let wb = WriteBatch::new();
     let mut batch_size = 0;
+    let cf = keys::get_cf_from_encoded_region(&options.region);
     loop {
         check_abort(&options.abort)?;
         let key = box_try!(decoder.decode_compact_bytes());
@@ -932,7 +900,10 @@ fn apply_plain_cf_file<D: CompactBytesFromFileDecoder>(
             }
             break;
         }
-        box_try!(check_key_in_region(keys::origin_key(&key), &options.region));
+        box_try!(check_key_in_region(
+            keys::origin_key(&key, &cf).as_slice(),
+            &options.region
+        ));
         batch_size += key.len();
         let value = box_try!(decoder.decode_compact_bytes());
         batch_size += value.len();

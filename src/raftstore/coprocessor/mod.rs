@@ -21,9 +21,10 @@ pub use self::dispatcher::{CoprocessorHost, Registry};
 pub use self::error::{Error, Result};
 pub use self::region_info_accessor::{RegionInfo, RegionInfoAccessor, SeekRegionCallback};
 pub use self::split_check::{
-    get_region_approximate_keys_txn,get_region_approximate_keys_raw,get_region_approximate_keys_cf, get_region_approximate_middle,
-    get_region_approximate_size, get_region_approximate_size_cf, HalfCheckObserver,
-    Host as SplitCheckerHost, KeysCheckObserver, SizeCheckObserver, TableCheckObserver,
+    get_region_approximate_keys_cf, get_region_approximate_keys_raw,
+    get_region_approximate_keys_txn, get_region_approximate_middle, get_region_approximate_size,
+    get_region_approximate_size_cf, HalfCheckObserver, Host as SplitCheckerHost, KeysCheckObserver,
+    SizeCheckObserver, TableCheckObserver,
 };
 
 pub use crate::raftstore::store::KeyEntry;

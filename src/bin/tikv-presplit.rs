@@ -133,7 +133,7 @@ fn main() {
     if let Some(t) = matches.value_of("table-name") {
         if t.len() != tikv::raftstore::store::keys::TABLE_LEN {
             println!("the length of table is wrong");
-            return
+            return;
         }
         table_name = t;
     }

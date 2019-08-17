@@ -90,12 +90,12 @@ impl<S: Snapshot> BackwardScanner<S> {
         loop {
             let (current_user_key, has_write, has_lock) = {
                 let w_key = if self.write_cursor.valid()? {
-                    Some(self.write_cursor.key(&mut self.statistics.write))
+                    Some(self.write_cursor.mvcc_key(&mut self.statistics.write))
                 } else {
                     None
                 };
                 let l_key = if self.lock_cursor.valid()? {
-                    Some(self.lock_cursor.key(&mut self.statistics.lock))
+                    Some(self.lock_cursor.mvcc_key(&mut self.statistics.lock))
                 } else {
                     None
                 };
@@ -198,7 +198,7 @@ impl<S: Snapshot> BackwardScanner<S> {
 
             let mut is_done = false;
             {
-                let current_key = self.write_cursor.key(&mut self.statistics.write);
+                let current_key = self.write_cursor.mvcc_key(&mut self.statistics.write);
                 last_checked_commit_ts = Key::decode_ts_from(current_key)?;
 
                 if !Key::is_user_key_eq(current_key, user_key.as_encoded().as_slice()) {
@@ -246,7 +246,7 @@ impl<S: Snapshot> BackwardScanner<S> {
             // means we have checked all versions for this user key. We use `last_version` as
             // return.
             let current_ts = {
-                let current_key = self.write_cursor.key(&mut self.statistics.write);
+                let current_key = self.write_cursor.mvcc_key(&mut self.statistics.write);
                 // We should never reach another user key.
                 assert!(Key::is_user_key_eq(
                     current_key,
@@ -340,7 +340,7 @@ impl<S: Snapshot> BackwardScanner<S> {
                 return Ok(());
             }
             {
-                let current_key = self.write_cursor.key(&mut self.statistics.write);
+                let current_key = self.write_cursor.mvcc_key(&mut self.statistics.write);
                 if !Key::is_user_key_eq(current_key, current_user_key.as_encoded().as_slice()) {
                     // Found another user key. We are done here.
                     return Ok(());

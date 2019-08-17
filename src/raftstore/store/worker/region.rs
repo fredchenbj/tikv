@@ -284,27 +284,9 @@ impl SnapContext {
 
         // clear up origin data.
         let region = region_state.get_region().clone();
-        let raw_cf = match keys::get_cf_from_encoded_region(&region) {
-            Ok(t) => t,
-            Err(err) => {
-                error!("error: {}", err);
-                return Err(box_err!("failed to get cf from region"));
-            }
-        };
-        let start_key = match keys::get_start_key_from_encoded_region(&region) {
-            Ok(t) => t,
-            Err(err) => {
-                error!("error: {}", err);
-                return Err(box_err!("failed to get start key from region"));
-            }
-        };
-        let end_key = match keys::get_end_key_from_encoded_region(&region) {
-            Ok(t) => t,
-            Err(err) => {
-                error!("error: {}", err);
-                return Err(box_err!("failed to get end key from region"));
-            }
-        };
+        let cf = keys::get_cf_from_encoded_region(&region);
+        let start_key = keys::enc_start_key(&region);
+        let end_key = keys::enc_end_key(&region);
 
         check_abort(&abort)?;
         self.cleanup_overlap_ranges(&start_key, &end_key);
@@ -329,7 +311,7 @@ impl SnapContext {
             };
         let term = apply_state.get_truncated_state().get_term();
         let idx = apply_state.get_truncated_state().get_index();
-        let snap_key = SnapKey::new_with_cf(region_id, term, idx, raw_cf);
+        let snap_key = SnapKey::new_with_cf(region_id, term, idx, cf);
         self.mgr.register(snap_key.clone(), SnapEntry::Applying);
         defer!({
             self.mgr.deregister(&snap_key, &SnapEntry::Applying);
