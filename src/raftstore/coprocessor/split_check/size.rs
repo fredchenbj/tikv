@@ -200,12 +200,15 @@ pub fn get_region_approximate_size(db: &DB, region: &Region) -> Result<u64> {
 }
 
 pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) -> Result<u64> {
+    info!("enter get region size");
     let cf = box_try!(rocks::util::get_cf_handle(db, cfname));
+    info!("break");
     let start_key = keys::enc_start_key(region);
     let end_key = keys::enc_end_key(region);
     let range = Range::new(&start_key, &end_key);
     // Return the approximate number of records and size in the range of memtables of the cf.
     let (_, mut size) = db.get_approximate_memtable_stats_cf(cf, &range);
+    info!("size: {}", size);
 
     let collection = box_try!(util::get_range_properties_cf(
         db, cfname, &start_key, &end_key

@@ -1249,6 +1249,7 @@ impl SnapManager {
                     None => return None,
                     Some(n) => n,
                 };
+                info!("file_name: {}", name);
                 let is_sending = name.starts_with(SNAP_GEN_PREFIX);
                 let numbers: Vec<u64> = name.split('.').next().map_or_else(
                     || vec![],
