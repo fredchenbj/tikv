@@ -195,6 +195,7 @@ impl<C: CasualRouter + Send> SplitCheckObserver for SizeCheckObserver<C> {
 /// Get the approximate size of the range.
 pub fn get_region_approximate_size(db: &DB, region: &Region) -> Result<u64> {
     let cf = keys::get_cf_from_encoded_region(&region);
+    info!("get region approximate size, cf: {}", &cf);
     Ok(get_region_approximate_size_cf(db, &cf, &region)?)
 }
 
@@ -213,6 +214,7 @@ pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) ->
         let props = box_try!(RangeProperties::decode(v.user_collected_properties()));
         size += props.get_approximate_size_in_range(&start_key, &end_key);
     }
+    info!("size: {}", size);
     Ok(size)
 }
 
