@@ -208,11 +208,14 @@ pub fn get_region_approximate_size_cf(db: &DB, cfname: &str, region: &Region) ->
     let range = Range::new(&start_key, &end_key);
     // Return the approximate number of records and size in the range of memtables of the cf.
     let (_, mut size) = db.get_approximate_memtable_stats_cf(cf, &range);
+    let mut size = 1;
     info!("size: {}", size);
+    info!("start_key: {:?}, end_key: {:?}", &start_key, &end_key);
 
     let collection = box_try!(util::get_range_properties_cf(
         db, cfname, &start_key, &end_key
     ));
+    info!("break");
     for (_, v) in &*collection {
         let props = box_try!(RangeProperties::decode(v.user_collected_properties()));
         size += props.get_approximate_size_in_range(&start_key, &end_key);
