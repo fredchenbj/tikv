@@ -155,7 +155,7 @@ impl SnapKey {
 
 impl Display for SnapKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}_{}_{}", self.region_id, self.term, self.idx)
+        write!(f, "{}_{}_{}_{}", self.region_id, self.term, self.idx, self.cf)
     }
 }
 
@@ -1249,8 +1249,11 @@ impl SnapManager {
                     None => return None,
                     Some(n) => n,
                 };
-                info!("file_name: {}", name);
                 let is_sending = name.starts_with(SNAP_GEN_PREFIX);
+                if name.ends_with(META_FILE_SUFFIX) {
+                    return None;
+                }
+                info!("file_name: {}", name);
                 let numbers: Vec<u64> = name.split('.').next().map_or_else(
                     || vec![],
                     |s| {
@@ -1260,6 +1263,15 @@ impl SnapManager {
                             .collect()
                     },
                 );
+                let cf_name = name.split('.').next().map_or_else(
+                    || None,
+                    |s| {s.split('_').nth(4)},
+                );
+                if cf_name.is_none() {
+                    return None;
+                }
+                let cf = cf_name.unwrap();
+                info!("cf: {}", cf);
                 if numbers.len() != 3 {
                     error!(
                         "failed to parse snapkey";
@@ -1267,7 +1279,7 @@ impl SnapManager {
                     );
                     return None;
                 }
-                let snap_key = SnapKey::new(numbers[0], numbers[1], numbers[2]);
+                let snap_key = SnapKey::new_with_cf(numbers[0], numbers[1], numbers[2], cf.to_string());
                 if core.registry.contains_key(&snap_key) {
                     // Skip those registered snapshot.
                     return None;
