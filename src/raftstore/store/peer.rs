@@ -1367,11 +1367,21 @@ impl Peer {
 
                 let term = self.term();
                 if is_read_index_request {
+                    debug!("handle reads with a read index";
+                        "request_id" => ?read.binary_id(),
+                        "region_id" => self.region_id,
+                        "peer_id" => self.peer.get_id(),
+                    );
                     for (req, cb) in read.cmds.drain(..) {
                         cb.invoke_read(self.handle_read(ctx, req, true, read.read_index));
                     }
                     self.pending_reads.ready_cnt -= 1;
                 } else if self.ready_to_handle_unsafe_replica_read(read.read_index.unwrap()) {
+                    debug!("handle reads with a read index";
+                        "request_id" => ?read.binary_id(),
+                        "region_id" => self.region_id,
+                        "peer_id" => self.peer.get_id(),
+                    );
                     for (req, cb) in read.cmds.drain(..) {
                         if req.get_header().get_replica_read() {
                             cb.invoke_read(self.handle_read(ctx, req, true, read.read_index));
@@ -1931,7 +1941,7 @@ impl Peer {
         if !self.is_leader() && self.leader_id() == INVALID_ID {
             cmd_resp::bind_error(
                 &mut err_resp,
-                box_err!("{} can not read index due to no leader", self.tag),
+                box_err!("can not read index due to no leader"),
             );
             poll_ctx.raft_metrics.invalid_proposal.read_index_no_leader += 1;
             cb.invoke_with_response(err_resp);
@@ -1942,8 +1952,15 @@ impl Peer {
         let last_pending_read_count = self.raft_group.raft.pending_read_count();
         let last_ready_read_count = self.raft_group.raft.ready_read_count();
 
+        poll_ctx.raft_metrics.propose.read_index += 1;
+
         let id = Uuid::new_v4();
         self.raft_group.read_index(id.as_bytes().to_vec());
+        debug!("request to get a read index";
+            "request_id" => ?id,
+            "region_id" => self.region_id,
+            "peer_id" => self.peer.get_id(),
+        );
 
         let pending_read_count = self.raft_group.raft.pending_read_count();
         let ready_read_count = self.raft_group.raft.ready_read_count();
