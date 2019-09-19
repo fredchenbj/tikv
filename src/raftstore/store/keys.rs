@@ -232,9 +232,26 @@ pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     }
 }
 
+//pub fn get_cf_from_encoded_region_start_key(encoded_key: &[u8]) -> String {
+//    assert!(encoded_key.len() >= TABLE_LEN);
+//    String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap()
+//}
+//
+//pub fn get_cf_from_encoded_region(region: &Region) -> String {
+//    assert!(!region.get_peers().is_empty());
+//    let region_start_key = region.get_start_key();
+//    if region_start_key.is_empty() {
+//        // let the last not-used region to mapped to default cf
+//        "default".to_string()
+//    } else {
+//        assert!(region_start_key.len() >= TABLE_LEN);
+//        String::from_utf8(region_start_key[0..TABLE_LEN].to_vec()).unwrap()
+//    }
+//}
+
 pub fn get_cf_from_encoded_region_start_key(encoded_key: &[u8]) -> String {
-    assert!(encoded_key.len() >= TABLE_LEN);
-    String::from_utf8(encoded_key[0..TABLE_LEN].to_vec()).unwrap()
+    assert!(encoded_key.len() >= TABLE_LEN+1);
+    hex::encode_upper(encoded_key[0..TABLE_LEN+1].to_vec())
 }
 
 pub fn get_cf_from_encoded_region(region: &Region) -> String {
@@ -244,8 +261,8 @@ pub fn get_cf_from_encoded_region(region: &Region) -> String {
         // let the last not-used region to mapped to default cf
         "default".to_string()
     } else {
-        assert!(region_start_key.len() >= TABLE_LEN);
-        String::from_utf8(region_start_key[0..TABLE_LEN].to_vec()).unwrap()
+        assert!(region_start_key.len() >= TABLE_LEN+1);
+        hex::encode_upper(region_start_key[0..TABLE_LEN+1].to_vec())
     }
 }
 
