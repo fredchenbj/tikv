@@ -3,6 +3,9 @@
 use std::borrow::ToOwned;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use std::fs::File;
+use std::io::prelude::*;
+
 use chrono;
 use clap::ArgMatches;
 
@@ -104,6 +107,12 @@ pub fn overwrite_config_with_cmd_args(config: &mut TiKvConfig, matches: &ArgMatc
 
     if let Some(endpoints) = matches.values_of("pd-endpoints") {
         config.pd.endpoints = endpoints.map(ToOwned::to_owned).collect();
+        let path: &str = "pd.txt";
+        let mut output: File = File::create(path).unwrap();
+        for pd in &config.pd.endpoints {
+            let _ = write!(output, "{}\n", pd);
+        }
+        let _ = output.flush();
     }
 
     if let Some(labels_vec) = matches.values_of("labels") {

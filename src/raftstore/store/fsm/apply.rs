@@ -1163,7 +1163,7 @@ impl ApplyDelegate {
             let _ = rocks::util::create_cf_handle_with_option(
                 &ctx.engines.kv,
                 &cf,
-                config::get_raw_cf_option(),
+                config::get_raw_cf_option(&cf),
             );
             info!("put create cf: {}", cf);
         }
@@ -1197,7 +1197,7 @@ impl ApplyDelegate {
             let _ = rocks::util::create_cf_handle_with_option(
                 &ctx.engines.kv,
                 &cf,
-                config::get_raw_cf_option(),
+                config::get_raw_cf_option(&cf),
             );
             info!("update create cf: {}", cf);
         }

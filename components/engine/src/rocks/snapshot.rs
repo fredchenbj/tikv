@@ -42,7 +42,7 @@ impl Snapshot {
             super::util::create_cf_handle_with_option(
                 &self.db,
                 cf,
-                super::util::config::get_raw_cf_option(),
+                super::util::config::get_raw_cf_option(cf),
             )
             .map_err(Error::from)
         } else {
@@ -68,7 +68,7 @@ impl Snapshot {
             super::util::create_cf_handle_with_option(
                 &self.db,
                 cf,
-                super::util::config::get_raw_cf_option(),
+                super::util::config::get_raw_cf_option(cf),
             )?
         } else {
             super::util::get_cf_handle(&self.db, cf)?
@@ -131,7 +131,7 @@ impl Iterable for Snapshot {
             super::util::create_cf_handle_with_option(
                 &self.db,
                 cf,
-                super::util::config::get_raw_cf_option(),
+                super::util::config::get_raw_cf_option(cf),
             )?
         } else {
             super::util::get_cf_handle(&self.db, cf)?
@@ -160,7 +160,7 @@ impl Peekable for Snapshot {
             super::util::create_cf_handle_with_option(
                 &self.db,
                 cf,
-                super::util::config::get_raw_cf_option(),
+                super::util::config::get_raw_cf_option(cf),
             )?
         } else {
             super::util::get_cf_handle(&self.db, cf)?

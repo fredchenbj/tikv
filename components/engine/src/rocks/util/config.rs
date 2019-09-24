@@ -3,6 +3,15 @@
 use std::collections::HashMap;
 use std::mem;
 
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+
+use hex;
+use json;
+use reqwest;
+use serde_json::Value;
+
 use crate::rocks::{
     BlockBasedOptions, Cache, ColumnFamilyOptions, CompactionPriority, DBCompactionStyle,
     DBCompressionType, LRUCacheOptions, MergeOperands, TitanDBOptions,
@@ -11,6 +20,8 @@ use tikv_util::config::ReadableSize;
 
 const DEFAULT_PROP_SIZE_INDEX_DISTANCE: u64 = 4 * 1024 * 1024;
 const DEFAULT_PROP_KEYS_INDEX_DISTANCE: u64 = 40 * 1024;
+
+const TABLE_LEN: usize = 4;
 
 #[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -425,9 +436,63 @@ impl RawCfConfig {
     }
 }
 
-pub fn get_raw_cf_option() -> ColumnFamilyOptions {
-    let config = self::RawCfConfig::default();
+pub fn get_raw_cf_option(cf: &str) -> ColumnFamilyOptions {
+    assert_eq!(cf.len(), (TABLE_LEN + 1) * 2);
+    let cf = String::from(cf);
+    let cf = String::from_utf8(hex::decode(&cf[0..TABLE_LEN * 2]).unwrap()).unwrap();
+    let mut config = self::RawCfConfig::default();
+    let pds = get_pd_endpoints();
+    let mut res = String::from("");
+
+    for pd in pds {
+        let url = format!("{}{}{}{}", "http://", pd, "/v2/keys/", cf);
+        //let resp: String = reqwest::get("http://10.136.16.2:2379/v2/keys/table2")?.text()?;
+        let resp = reqwest::get(url.as_str());
+        if resp.is_ok() {
+            res = resp.unwrap().text().unwrap();
+            break;
+        }
+    }
+    let u = json::parse(&res).unwrap();
+
+    //println!("{:#?}", u["node"]["nodes"][0]["value"].as_str().unwrap());
+    let str = u["node"]["nodes"][0]["value"].as_str().unwrap();
+    let v: Value = serde_json::from_str(str).unwrap();
+
+    let m = v.as_object().unwrap();
+    for (key, value) in m {
+        println!("{}: {}", key, value.as_str().unwrap());
+        match key.as_str() {
+            "block_cache_size" => {
+                if let Some(capacity_str) = value.as_str() {
+                    config.block_cache_size = capacity_str.parse().unwrap_or_else(|e| {
+                        println!("invalid size: {}", e);
+                        ReadableSize::mb(0)
+                    });
+                }
+            }
+            "ttl" => {
+                println!("ttl: {}", value.as_str().unwrap());
+            }
+            _ => {
+                println!("default path");
+            }
+        }
+    }
     config.build_opt()
+}
+
+pub fn get_pd_endpoints() -> Vec<String> {
+    let path: &str = "pd.txt";
+    let input: File = File::open(path).unwrap();
+    let buffered: BufReader<File> = BufReader::new(input);
+
+    let mut endpoints: Vec<String> = Vec::new();
+    for line in buffered.lines().map(|x| x.unwrap()) {
+        // println!("{}", line);
+        endpoints.push(line);
+    }
+    endpoints
 }
 
 /**

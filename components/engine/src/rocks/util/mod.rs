@@ -242,7 +242,7 @@ pub fn new_engine_opt(
                 cfs_opts_v.push(tmp.options);
             }
             None => {
-                cfs_opts_v.push(config::get_raw_cf_option());
+                cfs_opts_v.push(config::get_raw_cf_option(cf));
             }
         }
     }

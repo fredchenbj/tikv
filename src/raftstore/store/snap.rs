@@ -1030,7 +1030,7 @@ impl Snapshot for Snap {
                 let _ = rocks::util::create_cf_handle_with_option(
                     &options.db,
                     &cf_file.cf,
-                    config::get_raw_cf_option(),
+                    config::get_raw_cf_option(&cf_file.cf),
                 );
                 info!("import create cf");
             }
