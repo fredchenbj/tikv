@@ -5,7 +5,7 @@ pub const CF_DEFAULT: CfName = "default";
 pub const CF_LOCK: CfName = "lock";
 pub const CF_WRITE: CfName = "write";
 pub const CF_RAFT: CfName = "raft";
-// [109, 101, 116, 97, 0])
+// [109, 101, 116, 97, 0]
 pub const CF_META: CfName = "6D65746100";
 //pub const CF_META: CfName = "meta";
 // Cfs that should be very large generally.

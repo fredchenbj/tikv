@@ -130,8 +130,11 @@ fn main() {
     //println!("{}", mem::size_of_val(&client));
 
     let mut table_name = "tttt";
+    let decode;
     if let Some(t) = matches.value_of("table-name") {
-        if t.len() != tikv::raftstore::store::keys::TABLE_LEN {
+        decode = hex::decode(t).unwrap();
+        let table = std::str::from_utf8(&decode).unwrap();
+        if table.len() != tikv::raftstore::store::keys::TABLE_LEN {
             println!("the length of table is wrong");
             return;
         }
