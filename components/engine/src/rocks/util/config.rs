@@ -453,8 +453,9 @@ impl RawCfConfig {
     }
 }
 
-pub fn get_raw_cf_option(cf: &str) -> ColumnFamilyOptions {
+pub fn get_raw_cf_option(cf: &str) -> (ColumnFamilyOptions, i32) {
     assert_eq!(cf.len(), (TABLE_LEN + 1) * 2);
+    let mut ttl = 0;
     let cf = &cf[0..TABLE_LEN * 2];
     debug!("new cf: {}", cf);
     let mut config = self::RawCfConfig::default();
@@ -490,7 +491,12 @@ pub fn get_raw_cf_option(cf: &str) -> ColumnFamilyOptions {
                     }
                 }
                 "ttl" => {
-                    info!("ttl: {}", value.as_str().unwrap());
+                    let t = value.as_str().unwrap();
+                    let t = t.parse::<i32>().unwrap();
+                    info!("ttl: {}", t);
+                    if t > 0 {
+                        ttl = t;
+                    }
                 }
                 _ => {
                     info!("default path");
@@ -499,7 +505,7 @@ pub fn get_raw_cf_option(cf: &str) -> ColumnFamilyOptions {
         }
     }
 
-    config.build_opt()
+    (config.build_opt(), ttl)
 }
 
 pub fn get_pd_endpoints() -> Vec<String> {

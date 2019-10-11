@@ -91,8 +91,13 @@ pub fn create_cf_handle_with_option<'a>(
     db: &'a DB,
     cf: &str,
     cf_option: ColumnFamilyOptions,
+    ttl: i32,
 ) -> Result<CFHandle<'a>> {
-    let handle = db.create_cf((cf, cf_option))?;
+    let handle = if ttl > 0 {
+        db.create_cf_with_ttl((cf, cf_option), ttl)?
+    } else {
+        db.create_cf((cf, cf_option))?
+    };
     Ok(handle)
 }
 
@@ -234,6 +239,8 @@ pub fn new_engine_opt(
     // Opens db.
     let mut cfs_v: Vec<&str> = Vec::new();
     let mut cfs_opts_v: Vec<ColumnFamilyOptions> = Vec::new();
+    let mut cfs_ttl_v: Vec<i32> = Vec::new();
+    let mut is_with_ttl = false;
     for cf in &existed {
         info!("existed cf: {}", cf);
         cfs_v.push(cf);
@@ -242,14 +249,24 @@ pub fn new_engine_opt(
                 let mut tmp = CFOptions::new(x.cf, x.options.clone());
                 adjust_dynamic_level_bytes(&cf_descs, &mut tmp);
                 cfs_opts_v.push(tmp.options);
+                cfs_ttl_v.push(0);
             }
             None => {
-                cfs_opts_v.push(config::get_raw_cf_option(cf));
+                let (cf_opt, ttl) = config::get_raw_cf_option(cf);
+                cfs_opts_v.push(cf_opt);
+                cfs_ttl_v.push(ttl);
+                if !is_with_ttl && ttl > 0 {
+                    is_with_ttl = true;
+                }
             }
         }
     }
     let cfds = cfs_v.into_iter().zip(cfs_opts_v).collect();
-    let db = DB::open_cf(db_opt, path, cfds).unwrap();
+    let db = if is_with_ttl {
+        DB::open_cf_with_ttl(db_opt, path, cfds, cfs_ttl_v.as_slice()).unwrap()
+    } else {
+        DB::open_cf(db_opt, path, cfds).unwrap()
+    };
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {

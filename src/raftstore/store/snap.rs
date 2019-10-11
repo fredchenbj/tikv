@@ -1027,10 +1027,12 @@ impl Snapshot for Snap {
             check_abort(&options.abort)?;
 
             if !rocks::util::existed_cf(&options.db, &cf_file.cf) {
+                let (cf_option, ttl) = config::get_raw_cf_option(&cf_file.cf);
                 let _ = rocks::util::create_cf_handle_with_option(
                     &options.db,
                     &cf_file.cf,
-                    config::get_raw_cf_option(&cf_file.cf),
+                    cf_option,
+                    ttl,
                 );
                 info!("import create cf");
             }
