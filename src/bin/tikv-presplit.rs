@@ -67,7 +67,6 @@ pub fn split_end_key(key: &[u8], prefix: u8) -> Vec<u8> {
 }
 
 pub fn split_and_scatter_region(range: RangeInfo, client: Arc<Client>) -> Result<bool> {
-    //  let range = RangeInfo::new(&start_key, &end_key, 0);
     let mut wait_scatter_regions = vec![];
 
     let tag = format!("[PrepareRangeJob {}:{}]", 0, 0);
@@ -90,7 +89,6 @@ pub fn split_and_scatter_region(range: RangeInfo, client: Arc<Client>) -> Result
 }
 
 fn main() {
-    // ./tikv-presplit --pd 10.136.16.1:2379 --table-name "table" --shard-bits 2
     let matches = App::new("TiKV BulkLoad")
         .about("bulk load for TiKV")
         .author(crate_authors!())
@@ -140,7 +138,6 @@ fn main() {
         table_id = table;
     }
 
-    //let mut shard_key_bits: u8 = 2;
     let shard_key_bits = matches
         .value_of("shard-bits")
         .map_or(0, |s| s.parse().expect("parse u8"));

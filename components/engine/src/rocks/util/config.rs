@@ -427,7 +427,7 @@ impl Default for RawCfConfig {
             compaction_pri: CompactionPriority::MinOverlappingRatio,
             dynamic_level_bytes: true,
             num_levels: 7,
-            max_bytes_for_level_multiplier: 4,
+            max_bytes_for_level_multiplier: 10,
             compaction_style: DBCompactionStyle::Level,
             disable_auto_compactions: false,
             soft_pending_compaction_bytes_limit: ReadableSize::gb(64),
@@ -482,17 +482,252 @@ pub fn get_raw_cf_option(cf: &str) -> (ColumnFamilyOptions, i32) {
         for (key, value) in m {
             info!("{}: {}", key, value.as_str().unwrap());
             match key.as_str() {
+                "block_size" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid block_size: {}", e);
+                            64
+                        });
+                        config.block_size = ReadableSize::kb(size);
+                    }
+                }
                 "block_cache_size" => {
-                    if let Some(capacity_str) = value.as_str() {
-                        config.block_cache_size = capacity_str.parse().unwrap_or_else(|e| {
-                            info!("invalid size: {}", e);
-                            ReadableSize::mb(0)
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid block_cache_size: {}", e);
+                            512
+                        });
+                        config.block_cache_size = ReadableSize::mb(size);
+                    }
+                }
+                "disable_block_cache" => {
+                    if let Some(v) = value.as_str() {
+                        config.disable_block_cache = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid disable_block_cache: {}", e);
+                            false
+                        });
+                    }
+                }
+                "cache_index_and_filter_blocks" => {
+                    if let Some(v) = value.as_str() {
+                        config.cache_index_and_filter_blocks =
+                            v.parse::<bool>().unwrap_or_else(|e| {
+                                warn!("invalid cache_index_and_filter_blocks: {}", e);
+                                true
+                            });
+                    }
+                }
+                "pin_l0_filter_and_index_blocks" => {
+                    if let Some(v) = value.as_str() {
+                        config.pin_l0_filter_and_index_blocks =
+                            v.parse::<bool>().unwrap_or_else(|e| {
+                                warn!("invalid pin_l0_filter_and_index_blocks: {}", e);
+                                true
+                            });
+                    }
+                }
+                "use_bloom_filter" => {
+                    if let Some(v) = value.as_str() {
+                        config.use_bloom_filter = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid use_bloom_filter: {}", e);
+                            true
+                        });
+                    }
+                }
+                "optimize_filters_for_hits" => {
+                    if let Some(v) = value.as_str() {
+                        config.optimize_filters_for_hits = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid optimize_filters_for_hits: {}", e);
+                            false
+                        });
+                    }
+                }
+                "whole_key_filtering" => {
+                    if let Some(v) = value.as_str() {
+                        config.whole_key_filtering = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid whole_key_filtering: {}", e);
+                            true
+                        });
+                    }
+                }
+                "bloom_filter_bits_per_key" => {
+                    if let Some(v) = value.as_str() {
+                        config.bloom_filter_bits_per_key = v.parse::<i32>().unwrap_or_else(|e| {
+                            warn!("invalid bloom_filter_bits_per_key: {}", e);
+                            10
+                        });
+                    }
+                }
+                "block_based_bloom_filter" => {
+                    if let Some(v) = value.as_str() {
+                        config.block_based_bloom_filter = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid block_based_bloom_filter: {}", e);
+                            false
+                        });
+                    }
+                }
+                "read_amp_bytes_per_bit" => {
+                    if let Some(v) = value.as_str() {
+                        config.read_amp_bytes_per_bit = v.parse::<u32>().unwrap_or_else(|e| {
+                            warn!("invalid read_amp_bytes_per_bit: {}", e);
+                            0
+                        });
+                    }
+                }
+                "write_buffer_size" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid write_buffer_size: {}", e);
+                            64
+                        });
+                        config.write_buffer_size = ReadableSize::mb(size);
+                    }
+                }
+                "max_write_buffer_number" => {
+                    if let Some(v) = value.as_str() {
+                        config.max_write_buffer_number = v.parse::<i32>().unwrap_or_else(|e| {
+                            warn!("invalid max_write_buffer_number: {}", e);
+                            100
+                        });
+                    }
+                }
+                "min_write_buffer_number_to_merge" => {
+                    if let Some(v) = value.as_str() {
+                        config.min_write_buffer_number_to_merge =
+                            v.parse::<i32>().unwrap_or_else(|e| {
+                                warn!("invalid min_write_buffer_number_to_merge: {}", e);
+                                2
+                            });
+                    }
+                }
+                "max_bytes_for_level_base" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid max_bytes_for_level_base: {}", e);
+                            512
+                        });
+                        config.max_bytes_for_level_base = ReadableSize::mb(size);
+                    }
+                }
+                "target_file_size_base" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid target_file_size_base: {}", e);
+                            32
+                        });
+                        config.target_file_size_base = ReadableSize::mb(size);
+                    }
+                }
+                "level0_file_num_compaction_trigger" => {
+                    if let Some(v) = value.as_str() {
+                        config.level0_file_num_compaction_trigger =
+                            v.parse::<i32>().unwrap_or_else(|e| {
+                                warn!("invalid level0_file_num_compaction_trigger: {}", e);
+                                4
+                            });
+                    }
+                }
+                "level0_slowdown_writes_trigger" => {
+                    if let Some(v) = value.as_str() {
+                        config.level0_slowdown_writes_trigger =
+                            v.parse::<i32>().unwrap_or_else(|e| {
+                                warn!("invalid level0_slowdown_writes_trigger: {}", e);
+                                100
+                            });
+                    }
+                }
+                "level0_stop_writes_trigger" => {
+                    if let Some(v) = value.as_str() {
+                        config.level0_stop_writes_trigger = v.parse::<i32>().unwrap_or_else(|e| {
+                            warn!("invalid level0_stop_writes_trigger: {}", e);
+                            300
+                        });
+                    }
+                }
+                "max_compaction_bytes" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid max_compaction_bytes: {}", e);
+                            2
+                        });
+                        config.max_compaction_bytes = ReadableSize::gb(size);
+                    }
+                }
+                "dynamic_level_bytes" => {
+                    if let Some(v) = value.as_str() {
+                        config.dynamic_level_bytes = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid dynamic_level_bytes: {}", e);
+                            true
+                        });
+                    }
+                }
+                "num_levels" => {
+                    if let Some(v) = value.as_str() {
+                        config.num_levels = v.parse::<i32>().unwrap_or_else(|e| {
+                            warn!("invalid num_levels: {}", e);
+                            7
+                        });
+                    }
+                }
+                "max_bytes_for_level_multiplier" => {
+                    if let Some(v) = value.as_str() {
+                        config.max_bytes_for_level_multiplier =
+                            v.parse::<i32>().unwrap_or_else(|e| {
+                                warn!("invalid max_bytes_for_level_multiplier: {}", e);
+                                10
+                            });
+                    }
+                }
+                "disable_auto_compactions" => {
+                    if let Some(v) = value.as_str() {
+                        config.disable_auto_compactions = v.parse::<bool>().unwrap_or_else(|e| {
+                            warn!("invalid disable_auto_compactions: {}", e);
+                            false
+                        });
+                    }
+                }
+                "soft_pending_compaction_bytes_limit" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid soft_pending_compaction_bytes_limit: {}", e);
+                            64
+                        });
+                        config.soft_pending_compaction_bytes_limit = ReadableSize::gb(size);
+                    }
+                }
+                "hard_pending_compaction_bytes_limit" => {
+                    if let Some(v) = value.as_str() {
+                        let size = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid hard_pending_compaction_bytes_limit: {}", e);
+                            256
+                        });
+                        config.hard_pending_compaction_bytes_limit = ReadableSize::gb(size);
+                    }
+                }
+                "prop_size_index_distance" => {
+                    if let Some(v) = value.as_str() {
+                        config.prop_size_index_distance = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid prop_size_index_distance: {}", e);
+                            DEFAULT_PROP_SIZE_INDEX_DISTANCE
+                        });
+                    }
+                }
+                "prop_keys_index_distance" => {
+                    if let Some(v) = value.as_str() {
+                        config.prop_keys_index_distance = v.parse::<u64>().unwrap_or_else(|e| {
+                            warn!("invalid prop_keys_index_distance: {}", e);
+                            DEFAULT_PROP_KEYS_INDEX_DISTANCE
                         });
                     }
                 }
                 "ttl" => {
-                    let t = value.as_str().unwrap();
-                    let t = t.parse::<i32>().unwrap();
+                    let mut t = 0;
+                    if let Some(v) = value.as_str() {
+                        t = v.parse::<i32>().unwrap_or_else(|e| {
+                            warn!("invalid ttl: {}", e);
+                            0
+                        });
+                    }
                     info!("ttl: {}", t);
                     if t > 0 {
                         ttl = t;
