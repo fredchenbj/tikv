@@ -257,11 +257,31 @@ impl<S: CasualRouter> Runner<S> {
         let cfs = vec![cf];
         MergedIterator::new(self.engine.as_ref(), &cfs, start_key, end_key, false).map(
             |mut iter| {
+                let mut size = 0;
+                let mut keys = 0;
                 while let Some(e) = iter.next() {
                     if host.on_kv(region, &e) {
-                        break;
+                        return;
                     }
+                    size += e.entry_size() as u64;
+                    keys += 1;
                 }
+
+                // if we scan the whole range, we can update approximate size and keys with accurate value.
+                info!(
+                    "update approximate size and keys with accurate value";
+                    "region_id" => region.get_id(),
+                    "size" => size,
+                    "keys" => keys,
+                );
+                let _ = self.router.send(
+                    region.get_id(),
+                    CasualMessage::RegionApproximateSize { size },
+                );
+                let _ = self.router.send(
+                    region.get_id(),
+                    CasualMessage::RegionApproximateKeys { keys },
+                );
             },
         )?;
         timer.observe_duration();
