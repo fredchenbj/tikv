@@ -1339,18 +1339,19 @@ impl Iterator for MvccInfoIterator {
     }
 }
 
-fn validate_db_and_cf(db: DBType, cf: &str) -> Result<()> {
-    match (db, cf) {
-        (DBType::KV, CF_DEFAULT)
-        | (DBType::KV, CF_WRITE)
-        | (DBType::KV, CF_LOCK)
-        | (DBType::KV, CF_RAFT)
-        | (DBType::RAFT, CF_DEFAULT) => Ok(()),
-        _ => Err(Error::InvalidArgument(format!(
-            "invalid cf {:?} for db {:?}",
-            cf, db
-        ))),
-    }
+fn validate_db_and_cf(_db: DBType, _cf: &str) -> Result<()> {
+    //    match (db, cf) {
+    //        (DBType::KV, CF_DEFAULT)
+    //        | (DBType::KV, CF_WRITE)
+    //        | (DBType::KV, CF_LOCK)
+    //        | (DBType::KV, CF_RAFT)
+    //        | (DBType::RAFT, CF_DEFAULT) => Ok(()),
+    //        _ => Err(Error::InvalidArgument(format!(
+    //            "invalid cf {:?} for db {:?}",
+    //            cf, db
+    //        ))),
+    //    }
+    Ok(())
 }
 
 fn set_region_tombstone(db: &DB, store_id: u64, region: Region, wb: &WriteBatch) -> Result<()> {

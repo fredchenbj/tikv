@@ -54,6 +54,13 @@ fn perror_and_exit<E: Error>(prefix: &str, e: E) -> ! {
     process::exit(-1);
 }
 
+pub fn split_start_key(table_key: &[u8], shard_byte: u8) -> Vec<u8> {
+    let mut v = Vec::with_capacity(1 + table_key.len());
+    v.extend_from_slice(table_key);
+    v.push(shard_byte);
+    v
+}
+
 fn new_debug_executor(
     db: Option<&str>,
     raft_db: Option<&str>,
@@ -1341,6 +1348,42 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("compact-table")
+                .about("Compact a table")
+                .arg(
+                    Arg::with_name("table_id")
+                        .long("table_id")
+                        .short("t")
+                        .takes_value(true)
+                        .help("The table id"),
+                )
+                .arg(
+                    Arg::with_name("shard_bits")
+                        .short("s")
+                        .long("shard_bits")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Shard Bits of this table ")
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .short("n")
+                        .long("threads")
+                        .takes_value(true)
+                        .default_value("1")
+                        .help("Number of threads in one compaction")
+                )
+                .arg(
+                    Arg::with_name("bottommost")
+                        .short("b")
+                        .long("bottommost")
+                        .takes_value(true)
+                        .default_value("default")
+                        .possible_values(&["skip", "force", "default"])
+                        .help("Set how to compact the bottommost level"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("tombstone")
                 .about("Set some regions on the node to tombstone by manual")
                 .arg(
@@ -1857,6 +1900,37 @@ fn main() {
             );
         } else {
             debug_executor.compact(host, db_type, cf, from_key, to_key, threads, bottommost);
+        }
+    } else if let Some(matches) = matches.subcommand_matches("compact-table") {
+        let db = "kv";
+        let db_type = if db == "kv" { DBType::KV } else { DBType::RAFT };
+
+        let mut table_id = "tttt";
+        let decode;
+        if let Some(t) = matches.value_of("table-id") {
+            decode = hex::decode(t).unwrap();
+            let table = std::str::from_utf8(&decode).unwrap();
+            if table.len() != tikv::raftstore::store::keys::TABLE_LEN {
+                println!("the length of table is wrong");
+                return;
+            }
+            table_id = table;
+        }
+
+        let shard_bits = value_t_or_exit!(matches.value_of("shard_bits"), u8);
+        if shard_bits > 8 {
+            process::exit(-1);
+        }
+
+        let max_count: u8 = 1 << shard_bits;
+        for i in 0..max_count {
+            let shard_byte = i;
+            let start_key = split_start_key(table_id.as_bytes(), shard_byte);
+            let cf = tikv::raftstore::store::keys::get_cf_from_encoded_region_start_key(&start_key);
+            let threads = value_t_or_exit!(matches.value_of("threads"), u32);
+            let bottommost = BottommostLevelCompaction::from(matches.value_of("bottommost"));
+
+            debug_executor.compact(host, db_type, &cf, None, None, threads, bottommost);
         }
     } else if let Some(matches) = matches.subcommand_matches("tombstone") {
         let regions = matches
