@@ -126,16 +126,14 @@ fn main() {
     };
     let client = Arc::new(client);
 
-    let mut table_id = "tttt";
-    let decode;
+    let mut table_id= Vec::new();
     if let Some(t) = matches.value_of("table-id") {
-        decode = hex::decode(t).unwrap();
-        let table = std::str::from_utf8(&decode).unwrap();
-        if table.len() != tikv::raftstore::store::keys::TABLE_LEN {
+        table_id = hex::decode(t).unwrap();
+
+        if table_id.len() != tikv::raftstore::store::keys::TABLE_LEN {
             println!("the length of table is wrong");
             return;
         }
-        table_id = table;
     }
 
     let shard_key_bits = matches
@@ -146,7 +144,7 @@ fn main() {
 
     for i in 0..max_count {
         let shard_byte = i;
-        let start_key = split_start_key(table_id.as_bytes(), shard_byte);
+        let start_key = split_start_key(&table_id, shard_byte);
 
         let range = RangeInfo::new(&start_key, &start_key, 0);
         let res = split_and_scatter_region(range, Arc::clone(&client));
