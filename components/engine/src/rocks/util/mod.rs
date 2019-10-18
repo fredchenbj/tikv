@@ -200,7 +200,12 @@ pub fn new_engine_opt(
             cfs_v.push(x.cf);
             cf_opts_v.push(x.options.clone());
         }
-        let db = DB::open_cf(db_opt, path, cfs_v.into_iter().zip(cf_opts_v).collect())?;
+        let db = DB::open_cf_with_ttl(
+            db_opt,
+            path,
+            cfs_v.into_iter().zip(cf_opts_v).collect(),
+            &[0],
+        )?;
         for x in cfs_opts {
             if x.cf == CF_DEFAULT {
                 continue;
@@ -250,7 +255,7 @@ pub fn new_engine_opt(
     let mut cfs_v: Vec<&str> = Vec::new();
     let mut cfs_opts_v: Vec<ColumnFamilyOptions> = Vec::new();
     let mut cfs_ttl_v: Vec<i32> = Vec::new();
-    let mut is_with_ttl = false;
+    let mut is_with_ttl = true;
     for cf in &existed {
         info!("existed cf: {}", cf);
         cfs_v.push(cf);
