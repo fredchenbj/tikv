@@ -93,12 +93,22 @@ pub fn create_cf_handle_with_option<'a>(
     cf_option: ColumnFamilyOptions,
     ttl: i32,
 ) -> Result<CFHandle<'a>> {
-    let handle = if ttl > 0 {
-        db.create_cf_with_ttl((cf, cf_option), ttl)?
+    info!("cf: {}, ttl: {}", cf, ttl);
+    let handle_res = if ttl > 0 {
+        db.create_cf_with_ttl((cf, cf_option), ttl)
     } else {
-        db.create_cf((cf, cf_option))?
+        db.create_cf((cf, cf_option))
     };
-    Ok(handle)
+    match handle_res {
+        Ok(handle) => {
+            info!("create cf: {} ok", cf);
+            return Ok(handle);
+        }
+        Err(e) => {
+            error!("create cf: {}, error: {}", cf, e);
+            return Err(Error::RocksDb(e));
+        }
+    }
 }
 
 pub fn open_opt(
