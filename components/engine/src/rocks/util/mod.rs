@@ -93,12 +93,9 @@ pub fn create_cf_handle_with_option<'a>(
     cf_option: ColumnFamilyOptions,
     ttl: i32,
 ) -> Result<CFHandle<'a>> {
-    info!("cf: {}, ttl: {}", cf, ttl);
-    let handle_res = if ttl > 0 {
-        db.create_cf_with_ttl((cf, cf_option), ttl)
-    } else {
-        db.create_cf((cf, cf_option))
-    };
+    info!("create cf: {}, ttl: {}", cf, ttl);
+    let handle_res = db.create_cf_with_ttl((cf, cf_option), ttl);
+
     match handle_res {
         Ok(handle) => {
             info!("create cf: {} ok", cf);
@@ -200,12 +197,17 @@ pub fn new_engine_opt(
             cfs_v.push(x.cf);
             cf_opts_v.push(x.options.clone());
         }
-        let db = DB::open_cf(db_opt, path, cfs_v.into_iter().zip(cf_opts_v).collect())?;
+        let db = DB::open_cf_with_ttl(
+            db_opt,
+            path,
+            cfs_v.into_iter().zip(cf_opts_v).collect(),
+            &[0],
+        )?;
         for x in cfs_opts {
             if x.cf == CF_DEFAULT {
                 continue;
             }
-            db.create_cf((x.cf, x.options))?;
+            db.create_cf_with_ttl((x.cf, x.options), 0)?;
         }
 
         return Ok(db);
@@ -232,25 +234,11 @@ pub fn new_engine_opt(
         vec![]
     };
 
-    // If all column families exist, just open db.
-    if existed == needed {
-        let mut cfs_v = vec![];
-        let mut cfs_opts_v = vec![];
-        for mut x in cfs_opts {
-            adjust_dynamic_level_bytes(&cf_descs, &mut x);
-            cfs_v.push(x.cf);
-            cfs_opts_v.push(x.options);
-        }
-
-        let db = DB::open_cf(db_opt, path, cfs_v.into_iter().zip(cfs_opts_v).collect())?;
-        return Ok(db);
-    }
-
     // Opens db.
     let mut cfs_v: Vec<&str> = Vec::new();
     let mut cfs_opts_v: Vec<ColumnFamilyOptions> = Vec::new();
     let mut cfs_ttl_v: Vec<i32> = Vec::new();
-    let mut is_with_ttl = false;
+    let mut is_with_ttl = true;
     for cf in &existed {
         info!("existed cf: {}", cf);
         cfs_v.push(cf);
@@ -272,23 +260,22 @@ pub fn new_engine_opt(
         }
     }
     let cfds = cfs_v.into_iter().zip(cfs_opts_v).collect();
-    let db = if is_with_ttl {
-        DB::open_cf_with_ttl(db_opt, path, cfds, cfs_ttl_v.as_slice()).unwrap()
-    } else {
-        DB::open_cf(db_opt, path, cfds).unwrap()
-    };
+    let db = DB::open_cf_with_ttl(db_opt, path, cfds, cfs_ttl_v.as_slice()).unwrap();
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
-        db.create_cf((
-            cf,
-            cfs_opts
-                .iter()
-                .find(|x| x.cf == cf)
-                .unwrap()
-                .options
-                .clone(),
-        ))?;
+        db.create_cf_with_ttl(
+            (
+                cf,
+                cfs_opts
+                    .iter()
+                    .find(|x| x.cf == cf)
+                    .unwrap()
+                    .options
+                    .clone(),
+            ),
+            0,
+        )?;
     }
     Ok(db)
 }

@@ -144,6 +144,11 @@ impl Default for IterOption {
 pub trait Iterable {
     fn new_iterator(&self, iter_opt: IterOption) -> DBIterator<&DB>;
     fn new_iterator_cf(&self, _: &str, iter_opt: IterOption) -> Result<DBIterator<&DB>>;
+    fn new_iterator_cf_with_base_db(
+        &self,
+        _: &str,
+        iter_opt: IterOption,
+    ) -> Result<DBIterator<&DB>>;
     // scan scans database using an iterator in range [start_key, end_key), calls function f for
     // each iteration, if f returns false, terminates this scan.
     fn scan<F>(&self, start_key: &[u8], end_key: &[u8], fill_cache: bool, f: F) -> Result<()>
@@ -172,6 +177,28 @@ pub trait Iterable {
         let end = KeyBuilder::from_slice(end_key, DATA_KEY_PREFIX_LEN, 0);
         let iter_opt = IterOption::new(Some(start), Some(end), fill_cache);
         scan_impl(self.new_iterator_cf(cf, iter_opt)?, start_key, f)
+    }
+
+    // like `scan`, only on a specific column family.
+    fn scan_cf_with_base_db<F>(
+        &self,
+        cf: &str,
+        start_key: &[u8],
+        end_key: &[u8],
+        fill_cache: bool,
+        f: F,
+    ) -> Result<()>
+    where
+        F: FnMut(&[u8], &[u8]) -> Result<bool>,
+    {
+        let start = KeyBuilder::from_slice(start_key, DATA_KEY_PREFIX_LEN, 0);
+        let end = KeyBuilder::from_slice(end_key, DATA_KEY_PREFIX_LEN, 0);
+        let iter_opt = IterOption::new(Some(start), Some(end), fill_cache);
+        scan_impl(
+            self.new_iterator_cf_with_base_db(cf, iter_opt)?,
+            start_key,
+            f,
+        )
     }
 
     // Seek the first key >= given key, if no found, return None.

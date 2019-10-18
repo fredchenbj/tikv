@@ -760,7 +760,7 @@ impl Snap {
                 .as_ref()
                 .map_or(0 as i64, |l| l.get_max_bytes_per_time());
             let mut bytes: i64 = 0;
-            kv_snap.scan_cf(cf, &begin_key, &end_key, false, |key, value| {
+            kv_snap.scan_cf_with_base_db(cf, &begin_key, &end_key, false, |key, value| {
                 let l = key.len() + value.len();
                 if let Some(ref limiter) = self.limiter {
                     if bytes >= base {

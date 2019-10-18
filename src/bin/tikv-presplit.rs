@@ -126,7 +126,7 @@ fn main() {
     };
     let client = Arc::new(client);
 
-    let mut table_id= Vec::new();
+    let mut table_id = Vec::new();
     if let Some(t) = matches.value_of("table-id") {
         table_id = hex::decode(t).unwrap();
 
