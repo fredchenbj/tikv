@@ -472,8 +472,15 @@ pub fn get_raw_cf_option(cf: &str) -> (ColumnFamilyOptions, i32) {
         }
     }
 
-    let u = json::parse(&res).unwrap();
-    let res_option = u["node"]["nodes"][0]["value"].as_str();
+    let u = json::parse(&res);
+    let json_value;
+    let res_option = if u.is_ok() {
+        json_value = u.unwrap();
+        json_value["node"]["nodes"][0]["value"].as_str()
+    } else {
+        None
+    };
+
     if res_option.is_some() {
         let str = res_option.unwrap();
         let v: Value = serde_json::from_str(str).unwrap();
