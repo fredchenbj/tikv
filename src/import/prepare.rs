@@ -19,12 +19,12 @@ use super::{Config, Error, Result};
 const MAX_RETRY_TIMES: u64 = 3;
 const RETRY_INTERVAL_SECS: u64 = 1;
 
-const SPLIT_WAIT_MAX_RETRY_TIMES: u64 = 64;
+const SPLIT_WAIT_MAX_RETRY_TIMES: u64 = 32;
 const SPLIT_WAIT_INTERVAL_MILLIS: u64 = 8;
 const SPLIT_MAX_WAIT_INTERVAL_MILLIS: u64 = 1000;
-const SCATTER_WAIT_MAX_RETRY_TIMES: u64 = 128;
-const SCATTER_WAIT_INTERVAL_MILLIS: u64 = 50;
-const SCATTER_MAX_WAIT_INTERVAL_MILLIS: u64 = 5000;
+const SCATTER_WAIT_MAX_RETRY_TIMES: u64 = 32;
+const SCATTER_WAIT_INTERVAL_MILLIS: u64 = 8;
+const SCATTER_MAX_WAIT_INTERVAL_MILLIS: u64 = 1000;
 
 macro_rules! exec_with_retry {
     ($tag:expr, $func:expr, $times:expr, $interval:expr, $max_duration:expr) => {
