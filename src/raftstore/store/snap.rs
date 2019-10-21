@@ -352,7 +352,7 @@ impl Snap {
         let display_path = Snap::get_display_path(&dir_path, &prefix);
 
         let mut cf_files = Vec::with_capacity(1);
-        let filename = format!("{}_{}{}", prefix, &key.cf, SST_FILE_SUFFIX);
+        let filename = format!("{}{}", prefix, SST_FILE_SUFFIX);
         let path = dir_path.join(&filename);
         let tmp_path = dir_path.join(format!("{}{}", filename, TMP_FILE_SUFFIX));
         let clone_path = dir_path.join(format!("{}{}", filename, CLONE_FILE_SUFFIX));
@@ -1276,13 +1276,6 @@ impl SnapManager {
                     return None;
                 }
                 let cf = cf_name.unwrap();
-                if numbers.len() != 3 {
-                    error!(
-                        "failed to parse snapkey";
-                        "snap_key" => %name,
-                    );
-                    return None;
-                }
                 let snap_key =
                     SnapKey::new_with_cf(numbers[0], numbers[1], numbers[2], cf.to_string());
                 if core.registry.contains_key(&snap_key) {
