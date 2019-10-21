@@ -151,6 +151,7 @@ impl Peekable for RegionSnapshot {
         )?;
         let data_key = keys::data_key(key);
         let cf = keys::get_cf_from_encoded_region(&self.region);
+        info!("get value cf: {}", &cf);
 
         self.snap.get_value_cf(&cf, &data_key)
     }
