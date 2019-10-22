@@ -93,12 +93,9 @@ pub fn create_cf_handle_with_option<'a>(
     cf_option: ColumnFamilyOptions,
     ttl: i32,
 ) -> Result<CFHandle<'a>> {
-    info!("cf: {}, ttl: {}", cf, ttl);
-    let handle_res = if ttl > 0 {
-        db.create_cf_with_ttl((cf, cf_option), ttl)
-    } else {
-        db.create_cf((cf, cf_option))
-    };
+    info!("create cf: {}, ttl: {}", cf, ttl);
+    let handle_res = db.create_cf_with_ttl((cf, cf_option), ttl);
+
     match handle_res {
         Ok(handle) => {
             info!("create cf: {} ok", cf);
@@ -285,16 +282,18 @@ pub fn new_engine_opt(
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
-        db.create_cf_with_ttl((
-            cf,
-            cfs_opts
-                .iter()
-                .find(|x| x.cf == cf)
-                .unwrap()
-                .options
-                .clone(),
-        ),
-        0)?;
+        db.create_cf_with_ttl(
+            (
+                cf,
+                cfs_opts
+                    .iter()
+                    .find(|x| x.cf == cf)
+                    .unwrap()
+                    .options
+                    .clone(),
+            ),
+            0,
+        )?;
     }
     Ok(db)
 }
