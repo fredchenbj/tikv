@@ -133,6 +133,25 @@ impl Iterable for Snapshot {
         }
         Ok(DBIterator::new_cf(&self.db, handle, opt))
     }
+
+    fn new_iterator_cf_with_base_db(
+        &self,
+        cf: &str,
+        iter_opt: IterOption,
+    ) -> Result<DBIterator<&DB>> {
+        let handle = if !super::util::existed_cf(&self.db, cf) {
+            info!("new_iterator_cf create cf");
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)?
+        } else {
+            super::util::get_cf_handle(&self.db, cf)?
+        };
+        let mut opt = iter_opt.build_read_opts();
+        unsafe {
+            opt.set_snapshot(&self.snap);
+        }
+        Ok(DBIterator::new_cf_with_base_db(&self.db, handle, opt))
+    }
 }
 
 impl Peekable for Snapshot {

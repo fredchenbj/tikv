@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#b182f232356d66c6a3c6014edbc7f296a9e83bf1"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#4c03e9a5b6cf28bd062fd316b527d78b1b0bb9f5"
 dependencies = [
  "bzip2-sys 0.1.7 (git+https://github.com/alexcrichton/bzip2-rs.git)",
  "cc 1.0.28 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1148,7 +1148,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#b182f232356d66c6a3c6014edbc7f296a9e83bf1"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#4c03e9a5b6cf28bd062fd316b527d78b1b0bb9f5"
 dependencies = [
  "bzip2-sys 0.1.7 (git+https://github.com/alexcrichton/bzip2-rs.git)",
  "cc 1.0.28 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1959,7 +1959,7 @@ dependencies = [
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#b182f232356d66c6a3c6014edbc7f296a9e83bf1"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.4#4c03e9a5b6cf28bd062fd316b527d78b1b0bb9f5"
 dependencies = [
  "crc 1.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.62 (registry+https://github.com/rust-lang/crates.io-index)",

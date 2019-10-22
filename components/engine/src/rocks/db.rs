@@ -28,6 +28,16 @@ impl Iterable for DB {
         let readopts = iter_opt.build_read_opts();
         Ok(DBIterator::new_cf(self, handle, readopts))
     }
+
+    fn new_iterator_cf_with_base_db(
+        &self,
+        cf: &str,
+        iter_opt: IterOption,
+    ) -> Result<DBIterator<&DB>> {
+        let handle = util::get_cf_handle(self, cf)?;
+        let readopts = iter_opt.build_read_opts();
+        Ok(DBIterator::new_cf_with_base_db(self, handle, readopts))
+    }
 }
 
 impl Mutable for DB {}
