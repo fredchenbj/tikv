@@ -210,7 +210,7 @@ pub fn new_engine_opt(
             if x.cf == CF_DEFAULT {
                 continue;
             }
-            db.create_cf((x.cf, x.options))?;
+            db.create_cf_with_ttl((x.cf, x.options), 0)?;
         }
 
         return Ok(db);
@@ -285,7 +285,7 @@ pub fn new_engine_opt(
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
-        db.create_cf((
+        db.create_cf_with_ttl((
             cf,
             cfs_opts
                 .iter()
@@ -293,7 +293,8 @@ pub fn new_engine_opt(
                 .unwrap()
                 .options
                 .clone(),
-        ))?;
+        ),
+        0)?;
     }
     Ok(db)
 }
