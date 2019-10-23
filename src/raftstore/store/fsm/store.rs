@@ -719,7 +719,7 @@ impl<T, C> RaftPollerBuilder<T, C> {
         let mut merging_count = 0;
         let mut meta = self.store_meta.lock().unwrap();
         info!("enter raftstore build init");
-        kv_engine.scan_cf_with_base_db(CF_RAFT, start_key, end_key, false, |key, value| {
+        kv_engine.scan_cf(CF_RAFT, start_key, end_key, false, |key, value| {
             let (region_id, suffix) = box_try!(keys::decode_region_meta_key(key));
             if suffix != keys::REGION_STATE_SUFFIX {
                 return Ok(true);
@@ -727,6 +727,7 @@ impl<T, C> RaftPollerBuilder<T, C> {
 
             total_count += 1;
 
+            info!("parse value: {:?}", value);
             let local_state = protobuf::parse_from_bytes::<RegionLocalState>(value)?;
             let region = local_state.get_region();
             if local_state.get_state() == PeerState::Tombstone {
