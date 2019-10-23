@@ -718,7 +718,8 @@ impl<T, C> RaftPollerBuilder<T, C> {
         let mut applying_regions = vec![];
         let mut merging_count = 0;
         let mut meta = self.store_meta.lock().unwrap();
-        kv_engine.scan_cf(CF_RAFT, start_key, end_key, false, |key, value| {
+        info!("enter raftstore build init");
+        kv_engine.scan_cf_with_base_db(CF_RAFT, start_key, end_key, false, |key, value| {
             let (region_id, suffix) = box_try!(keys::decode_region_meta_key(key));
             if suffix != keys::REGION_STATE_SUFFIX {
                 return Ok(true);
@@ -771,6 +772,7 @@ impl<T, C> RaftPollerBuilder<T, C> {
             );
             Ok(true)
         })?;
+        info!("out raftstore init");
 
         if !kv_wb.is_empty() {
             self.engines.kv.write(&kv_wb).unwrap();
