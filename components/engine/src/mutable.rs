@@ -14,6 +14,7 @@ pub trait Mutable: Writable {
     fn put_msg_cf<M: protobuf::Message>(&self, cf: CFHandle, key: &[u8], m: &M) -> Result<()> {
         let value = m.write_to_bytes()?;
         self.put_cf(cf, key, &value)?;
+        info!("set raft kv: {:?}, {:?}", key, value);
         Ok(())
     }
 

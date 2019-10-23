@@ -727,7 +727,7 @@ impl<T, C> RaftPollerBuilder<T, C> {
 
             total_count += 1;
 
-            info!("parse value: {:?}", value);
+            info!("get raft kv: {:?}, {:?}", key, value);
             let local_state = protobuf::parse_from_bytes::<RegionLocalState>(value)?;
             let region = local_state.get_region();
             if local_state.get_state() == PeerState::Tombstone {
