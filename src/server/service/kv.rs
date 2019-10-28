@@ -664,6 +664,7 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
         mut req: UnsafeDestroyRangeRequest,
         sink: UnarySink<UnsafeDestroyRangeResponse>,
     ) {
+        info!("enter unsafe_detroy_range in kv.rs");
         let timer = GRPC_MSG_HISTOGRAM_VEC
             .unsafe_destroy_range
             .start_coarse_timer();

@@ -296,12 +296,16 @@ impl<E: Engine> GCRunner<E> {
         Ok(())
     }
 
-    fn unsafe_destroy_cfs(&self, start_key: &Key, end_key: &Key) -> Result<()> {
-        let mut start_data_key = keys::data_key(start_key.as_encoded());
-        let end_data_key = keys::data_key(end_key.as_encoded());
+    fn unsafe_destroy_cfs(&self, start_key: &Key, _end_key: &Key) -> Result<()> {
+        let mut start_data_key = start_key.to_raw().unwrap();
+        //let end_data_key = end_key.into_encoded();
 
         let shard_key = start_data_key.split_off(TABLE_LEN);
-        assert_eq!(start_data_key, end_data_key);
+        info!(
+            "unsafe_destory_table: {:?}, shard_key: {:?}",
+            start_data_key, shard_key[0]
+        );
+        //assert_eq!(start_data_key, end_data_key);
 
         let local_storage = self.local_storage.as_ref().ok_or_else(|| {
             let e: Error = box_err!("unsafe destroy cfs not supported: local_storage not set");
@@ -309,8 +313,12 @@ impl<E: Engine> GCRunner<E> {
             e
         })?;
 
-        let table_name = end_data_key.as_slice();
+        let table_name = start_data_key.as_slice();
         let bits = shard_key[0];
+        if bits > 7 {
+            return Err(Error::Others(String::from("shard bits > 7")));
+        }
+        let bits = 1 << bits;
         for i in 0..bits {
             let mut cf_name = Vec::new();
             cf_name.extend_from_slice(table_name);
