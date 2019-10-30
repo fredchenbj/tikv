@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::thread::{Builder as ThreadBuilder, JoinHandle};
 use std::{error, result};
 
-use engine::rocks::util::get_cf_handle;
+use engine::rocks::util::{existed_cf, get_cf_handle};
 use engine::rocks::{
     CompactOptions, DBBottommostLevelCompaction, DBIterator as RocksIterator, Kv, ReadOptions,
     SeekKey, Writable, WriteBatch, WriteOptions, DB,
@@ -308,6 +308,11 @@ impl Debugger {
     ) -> Result<()> {
         validate_db_and_cf(db, cf)?;
         let db = self.get_db_from_type(db)?;
+
+        if !existed_cf(db, cf) {
+            return Ok(());
+        }
+
         let handle = box_try!(get_cf_handle(db, cf));
         let start = if start.is_empty() { None } else { Some(start) };
         let end = if end.is_empty() { None } else { Some(end) };

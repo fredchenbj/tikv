@@ -1348,42 +1348,6 @@ fn main() {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("compact-table")
-                .about("Compact a table")
-                .arg(
-                    Arg::with_name("table_id")
-                        .long("table_id")
-                        .short("t")
-                        .takes_value(true)
-                        .help("The table id"),
-                )
-                .arg(
-                    Arg::with_name("shard_bits")
-                        .short("s")
-                        .long("shard_bits")
-                        .takes_value(true)
-                        .default_value("0")
-                        .help("Shard Bits of this table ")
-                )
-                .arg(
-                    Arg::with_name("threads")
-                        .short("n")
-                        .long("threads")
-                        .takes_value(true)
-                        .default_value("1")
-                        .help("Number of threads in one compaction")
-                )
-                .arg(
-                    Arg::with_name("bottommost")
-                        .short("b")
-                        .long("bottommost")
-                        .takes_value(true)
-                        .default_value("default")
-                        .possible_values(&["skip", "force", "default"])
-                        .help("Set how to compact the bottommost level"),
-                ),
-        )
-        .subcommand(
             SubCommand::with_name("tombstone")
                 .about("Set some regions on the node to tombstone by manual")
                 .arg(
@@ -1651,6 +1615,42 @@ fn main() {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("compact-table")
+                .about("Compact a table")
+                .arg(
+                    Arg::with_name("table-id")
+                        .long("table-id")
+                        .short("t")
+                        .takes_value(true)
+                        .help("The table id"),
+                )
+                .arg(
+                    Arg::with_name("shard-bits")
+                        .short("s")
+                        .long("shard-bits")
+                        .takes_value(true)
+                        .default_value("0")
+                        .help("Shard Bits of this table ")
+                )
+                .arg(
+                    Arg::with_name("threads")
+                        .short("n")
+                        .long("threads")
+                        .takes_value(true)
+                        .default_value("1")
+                        .help("Number of threads in one compaction")
+                )
+                .arg(
+                    Arg::with_name("bottommost")
+                        .short("b")
+                        .long("bottommost")
+                        .takes_value(true)
+                        .default_value("default")
+                        .possible_values(&["skip", "force", "default"])
+                        .help("Set how to compact the bottommost level"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("region-properties")
                 .about("Show region properties")
                 .arg(
@@ -1800,14 +1800,41 @@ fn main() {
                 &pd_client, &cfg, mgr, db_type, cfs, from_key, to_key, threads, bottommost,
             );
         }
+
         if let Some(matches) = matches.subcommand_matches("split-region") {
             let region_id = value_t_or_exit!(matches.value_of("region"), u64);
             let key = unescape(matches.value_of("key").unwrap());
             return split_region(&pd_client, mgr, region_id, key);
         }
 
+        if let Some(matches) = matches.subcommand_matches("compact-table") {
+            //println!("enter compact table");
+            let db = "kv";
+            let db_type = if db == "kv" { DBType::KV } else { DBType::RAFT };
+
+            let mut table_id = Vec::new();
+            if let Some(t) = matches.value_of("table-id") {
+                table_id = hex::decode(t).unwrap();
+                if table_id.len() != tikv::raftstore::store::keys::TABLE_LEN {
+                    println!("the length of table is wrong");
+                    process::exit(-1);
+                }
+            }
+
+            let shard_bits = value_t_or_exit!(matches.value_of("shard-bits"), u8);
+            if shard_bits > 8 {
+                process::exit(-1);
+            }
+
+            let threads = value_t_or_exit!(matches.value_of("threads"), u32);
+            let bottommost = BottommostLevelCompaction::from(matches.value_of("bottommost"));
+
+            return compact_whole_table(
+                &pd_client, &cfg, mgr, db_type, table_id, shard_bits, threads, bottommost,
+            );
+        }
+
         let _ = app.print_help();
-        return;
     }
 
     // Deal with all subcommands about db or host.
@@ -1900,37 +1927,6 @@ fn main() {
             );
         } else {
             debug_executor.compact(host, db_type, cf, from_key, to_key, threads, bottommost);
-        }
-    } else if let Some(matches) = matches.subcommand_matches("compact-table") {
-        let db = "kv";
-        let db_type = if db == "kv" { DBType::KV } else { DBType::RAFT };
-
-        let mut table_id = "tttt";
-        let decode;
-        if let Some(t) = matches.value_of("table-id") {
-            decode = hex::decode(t).unwrap();
-            let table = std::str::from_utf8(&decode).unwrap();
-            if table.len() != tikv::raftstore::store::keys::TABLE_LEN {
-                println!("the length of table is wrong");
-                return;
-            }
-            table_id = table;
-        }
-
-        let shard_bits = value_t_or_exit!(matches.value_of("shard_bits"), u8);
-        if shard_bits > 8 {
-            process::exit(-1);
-        }
-
-        let max_count: u8 = 1 << shard_bits;
-        for i in 0..max_count {
-            let shard_byte = i;
-            let start_key = split_start_key(table_id.as_bytes(), shard_byte);
-            let cf = tikv::raftstore::store::keys::get_cf_from_encoded_region_start_key(&start_key);
-            let threads = value_t_or_exit!(matches.value_of("threads"), u32);
-            let bottommost = BottommostLevelCompaction::from(matches.value_of("bottommost"));
-
-            debug_executor.compact(host, db_type, &cf, None, None, threads, bottommost);
         }
     } else if let Some(matches) = matches.subcommand_matches("tombstone") {
         let regions = matches
@@ -2220,6 +2216,49 @@ fn split_region(pd_client: &RpcClient, mgr: Arc<SecurityManager>, region_id: u64
         resp.get_left().get_id(),
         resp.get_right().get_id(),
     );
+}
+
+fn compact_whole_table(
+    pd_client: &RpcClient,
+    cfg: &TiKvConfig,
+    mgr: Arc<SecurityManager>,
+    db_type: DBType,
+    table_id: Vec<u8>,
+    shard_bits: u8,
+    threads: u32,
+    bottommost: BottommostLevelCompaction,
+) {
+    let stores = pd_client
+        .get_all_stores(true) // Exclude tombstone stores.
+        .unwrap_or_else(|e| perror_and_exit("Get all cluster stores from PD failed", e));
+
+    let mut handles = Vec::new();
+    let max_count: u8 = 1 << shard_bits;
+
+    for s in stores {
+        let cfg = cfg.clone();
+        let mgr = Arc::clone(&mgr);
+        let addr = s.address.clone();
+        let table_byte = table_id.clone();
+
+        let h = thread::spawn(move || {
+            let debug_executor = new_debug_executor(None, None, Some(&addr), &cfg, mgr);
+            for i in 0..max_count {
+                let shard_byte = i;
+                let start_key = split_start_key(&table_byte, shard_byte);
+                let cf =
+                    tikv::raftstore::store::keys::get_cf_from_encoded_region_start_key(&start_key);
+                //println!("compact host: {}, cf: {}", addr, cf);
+
+                debug_executor.compact(Some(&addr), db_type, &cf, None, None, threads, bottommost);
+            }
+        });
+        handles.push(h);
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
 }
 
 fn compact_whole_cluster(
