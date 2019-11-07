@@ -39,7 +39,8 @@ impl Snapshot {
     pub fn cf_handle(&self, cf: &str) -> Result<CFHandle> {
         if !super::util::existed_cf(&self.db, cf) {
             info!("cf_handle create cf");
-            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            let cache = &self.db.as_ref().cache;
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf, cache);
             super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)
                 .map_err(Error::from)
         } else {
@@ -62,7 +63,8 @@ impl Snapshot {
     pub fn db_iterator_cf(&self, cf: &str, iter_opt: IterOption) -> Result<DBIterator<Arc<DB>>> {
         let handle = if !super::util::existed_cf(&self.db, cf) {
             info!("db_iterator_cf create cf");
-            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            let cache = &self.db.as_ref().cache;
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf, cache);
             super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)?
         } else {
             super::util::get_cf_handle(&self.db, cf)?
@@ -122,7 +124,8 @@ impl Iterable for Snapshot {
     fn new_iterator_cf(&self, cf: &str, iter_opt: IterOption) -> Result<DBIterator<&DB>> {
         let handle = if !super::util::existed_cf(&self.db, cf) {
             info!("new_iterator_cf create cf");
-            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            let cache = &self.db.as_ref().cache;
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf, cache);
             super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)?
         } else {
             super::util::get_cf_handle(&self.db, cf)?
@@ -141,7 +144,8 @@ impl Iterable for Snapshot {
     ) -> Result<DBIterator<&DB>> {
         let handle = if !super::util::existed_cf(&self.db, cf) {
             info!("new_iterator_cf create cf");
-            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            let cache = &self.db.as_ref().cache;
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf, cache);
             super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)?
         } else {
             super::util::get_cf_handle(&self.db, cf)?
@@ -167,7 +171,8 @@ impl Peekable for Snapshot {
     fn get_value_cf(&self, cf: &str, key: &[u8]) -> Result<Option<DBVector>> {
         let handle = if !super::util::existed_cf(&self.db, cf) {
             info!("get_value_cf create cf");
-            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf);
+            let cache = &self.db.as_ref().cache;
+            let (cf_option, ttl) = super::util::config::get_raw_cf_option(&cf, cache);
             super::util::create_cf_handle_with_option(&self.db, cf, cf_option, ttl)?
         } else {
             super::util::get_cf_handle(&self.db, cf)?

@@ -440,8 +440,7 @@ impl Default for RawCfConfig {
 }
 
 impl RawCfConfig {
-    pub fn build_opt(&self) -> ColumnFamilyOptions {
-        let cache: Option<_> = None;
+    pub fn build_opt(&self, cache: &Option<Cache>) -> ColumnFamilyOptions {
         let mut cf_opts = build_cf_opt!(self, cache);
         let f = Box::new(super::properties::RangePropertiesCollectorFactory {
             prop_size_index_distance: self.prop_size_index_distance,
@@ -453,7 +452,7 @@ impl RawCfConfig {
     }
 }
 
-pub fn get_raw_cf_option(cf: &str) -> (ColumnFamilyOptions, i32) {
+pub fn get_raw_cf_option(cf: &str, cache: &Option<Cache>) -> (ColumnFamilyOptions, i32) {
     assert_eq!(cf.len(), (TABLE_LEN + 1) * 2);
     let mut ttl = 0;
     let cf = &cf[0..TABLE_LEN * 2];
@@ -747,7 +746,7 @@ pub fn get_raw_cf_option(cf: &str) -> (ColumnFamilyOptions, i32) {
         }
     }
 
-    (config.build_opt(), ttl)
+    (config.build_opt(cache), ttl)
 }
 
 pub fn get_pd_endpoints() -> Vec<String> {

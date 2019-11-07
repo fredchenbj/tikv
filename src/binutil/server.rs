@@ -141,6 +141,7 @@ fn run_raft_server(pd_client: RpcClient, cfg: &TiKvConfig, security_mgr: Arc<Sec
         raft_db_path.to_str().unwrap(),
         raft_db_opts,
         raft_db_cf_opts,
+        cache,
     )
     .unwrap_or_else(|s| fatal!("failed to create raft engine: {}", s));
 
@@ -164,8 +165,9 @@ fn run_raft_server(pd_client: RpcClient, cfg: &TiKvConfig, security_mgr: Arc<Sec
 
     // Create kv engine, storage.
     let kv_cfs_opts = cfg.rocksdb.build_cf_opts(&cache);
-    let kv_engine = rocks::util::new_engine_opt(db_path.to_str().unwrap(), kv_db_opts, kv_cfs_opts)
-        .unwrap_or_else(|s| fatal!("failed to create kv engine: {}", s));
+    let kv_engine =
+        rocks::util::new_engine_opt(db_path.to_str().unwrap(), kv_db_opts, kv_cfs_opts, cache)
+            .unwrap_or_else(|s| fatal!("failed to create kv engine: {}", s));
 
     let engines = Engines::new(Arc::new(kv_engine), Arc::new(raft_engine), cache.is_some());
     let store_meta = Arc::new(Mutex::new(StoreMeta::new(PENDING_VOTES_CAP)));

@@ -1514,7 +1514,7 @@ pub fn maybe_upgrade_from_2_to_3(
 
     // Create v2.0.x kv engine.
     let kv_cfs_opts = kv_cfg.build_cf_opts_v2(cache);
-    let kv_engine = rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts)?;
+    let kv_engine = rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts, None)?;
 
     // Move meta data from kv engine to raft engine.
     let upgrade_raft_wb = WriteBatch::new();

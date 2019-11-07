@@ -79,7 +79,8 @@ fn new_debug_executor(
                     encrypted_env_from_cipher_file(mgr.cipher_file(), None).unwrap();
                 kv_db_opts.set_env(encrypted_env);
             }
-            let kv_db = rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts).unwrap();
+            let kv_db =
+                rocks::util::new_engine_opt(kv_path, kv_db_opts, kv_cfs_opts, None).unwrap();
 
             let raft_path = raft_db
                 .map(ToString::to_string)
@@ -93,7 +94,8 @@ fn new_debug_executor(
                 raft_db_opts.set_env(encrypted_env);
             }
             let raft_db =
-                rocks::util::new_engine_opt(&raft_path, raft_db_opts, raft_db_cf_opts).unwrap();
+                rocks::util::new_engine_opt(&raft_path, raft_db_opts, raft_db_cf_opts, None)
+                    .unwrap();
 
             Box::new(Debugger::new(Engines::new(
                 Arc::new(kv_db),

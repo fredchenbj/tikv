@@ -1147,7 +1147,8 @@ impl ApplyDelegate {
         self.metrics.size_diff_hint += value.len() as i64;
 
         if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
-            let (cf_option, ttl) = config::get_raw_cf_option(&cf);
+            let cache = &ctx.engines.kv.cache;
+            let (cf_option, ttl) = config::get_raw_cf_option(&cf, cache);
             let _ = rocks::util::create_cf_handle_with_option(&ctx.engines.kv, &cf, cf_option, ttl);
 
             info!("put create cf: {}", cf);
@@ -1179,7 +1180,8 @@ impl ApplyDelegate {
         self.metrics.size_diff_hint += value.len() as i64;
 
         if !rocks::util::existed_cf(&ctx.engines.kv, &cf) {
-            let (cf_option, ttl) = config::get_raw_cf_option(&cf);
+            let cache = &ctx.engines.kv.cache;
+            let (cf_option, ttl) = config::get_raw_cf_option(&cf, cache);
             let _ = rocks::util::create_cf_handle_with_option(&ctx.engines.kv, &cf, cf_option, ttl);
             info!("update create cf: {}", cf);
         }

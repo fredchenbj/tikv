@@ -54,7 +54,12 @@ impl Engine {
     ) -> Result<Engine> {
         let db = {
             let (db_opts, cf_opts) = tune_dboptions_for_bulk_load(&db_cfg);
-            new_engine_opt(path.as_ref().to_str().unwrap(), db_opts, vec![cf_opts])?
+            new_engine_opt(
+                path.as_ref().to_str().unwrap(),
+                db_opts,
+                vec![cf_opts],
+                None,
+            )?
         };
         Ok(Engine {
             db: Arc::new(db),

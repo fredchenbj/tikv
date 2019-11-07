@@ -26,7 +26,7 @@ use crate::rocks::load_latest_options;
 use crate::rocks::set_external_sst_file_global_seq_no;
 use crate::rocks::supported_compression;
 use crate::rocks::{
-    CColumnFamilyDescriptor, ColumnFamilyOptions, CompactOptions, CompactionOptions,
+    CColumnFamilyDescriptor, Cache, ColumnFamilyOptions, CompactOptions, CompactionOptions,
     DBCompressionType, DBOptions, Env, Range, SliceTransform, DB,
 };
 use crate::{Error, Result, CF_DEFAULT};
@@ -150,7 +150,7 @@ pub fn new_engine(
             default_cfs_opts
         }
     };
-    new_engine_opt(path, db_opts, cf_opts)
+    new_engine_opt(path, db_opts, cf_opts, None)
 }
 
 /// Turns "dynamic level size" off for the existing column family which was off before.
@@ -186,6 +186,7 @@ pub fn new_engine_opt(
     path: &str,
     mut db_opt: DBOptions,
     cfs_opts: Vec<CFOptions<'_>>,
+    cache: Option<Cache>,
 ) -> Result<DB> {
     // Creates a new db if it doesn't exist.
     if !db_exist(path) {
@@ -202,6 +203,7 @@ pub fn new_engine_opt(
             path,
             cfs_v.into_iter().zip(cf_opts_v).collect(),
             &[0],
+            cache,
         )?;
         for x in cfs_opts {
             if x.cf == CF_DEFAULT {
@@ -250,7 +252,7 @@ pub fn new_engine_opt(
                 cfs_ttl_v.push(0);
             }
             None => {
-                let (cf_opt, ttl) = config::get_raw_cf_option(cf);
+                let (cf_opt, ttl) = config::get_raw_cf_option(cf, &cache);
                 cfs_opts_v.push(cf_opt);
                 cfs_ttl_v.push(ttl);
                 if !is_with_ttl && ttl > 0 {
@@ -260,7 +262,7 @@ pub fn new_engine_opt(
         }
     }
     let cfds = cfs_v.into_iter().zip(cfs_opts_v).collect();
-    let db = DB::open_cf_with_ttl(db_opt, path, cfds, cfs_ttl_v.as_slice()).unwrap();
+    let db = DB::open_cf_with_ttl(db_opt, path, cfds, cfs_ttl_v.as_slice(), cache).unwrap();
 
     // Creates needed column families if they don't exist.
     for cf in cfs_diff(&needed, &existed) {
