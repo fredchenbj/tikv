@@ -126,4 +126,12 @@ lazy_static! {
         &["cf", "name"]
     )
     .unwrap();
+    pub static ref TABLE_GRPC_COMMAND_DURATION_HISTOGRAM_VEC: HistogramVec =
+        register_histogram_vec!(
+            "tikv_table_grpc_command_duration",
+            "Bucketed histogram of duration of a grpc table command",
+            &["type", "table"],
+            exponential_buckets(0.0005, 2.0, 20).unwrap()
+        )
+        .unwrap();
 }

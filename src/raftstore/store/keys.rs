@@ -232,6 +232,11 @@ pub fn data_end_key(region_end_key: &[u8]) -> Vec<u8> {
     }
 }
 
+pub fn get_table_from_key(encoded_key: &[u8]) -> String {
+    assert!(encoded_key.len() >= TABLE_LEN + 1);
+    hex::encode_upper(encoded_key[0..TABLE_LEN].to_vec())
+}
+
 pub fn get_cf_from_encoded_region_start_key(encoded_key: &[u8]) -> String {
     assert!(encoded_key.len() >= TABLE_LEN + 1);
     hex::encode_upper(encoded_key[0..TABLE_LEN + 1].to_vec())

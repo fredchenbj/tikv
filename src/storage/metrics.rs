@@ -190,4 +190,12 @@ lazy_static! {
         "Counter of request exceed bound"
     )
     .unwrap();
+    pub static ref TABLE_SNAP_PROCESSING_READ_HISTOGRAM_VEC: HistogramVec =
+        register_histogram_vec!(
+            "tikv_table_snap_processing_read_duration",
+            "Bucketed histogram of duration of table snap processing read command",
+            &["type", "table"],
+            exponential_buckets(0.0005, 2.0, 20).unwrap()
+        )
+        .unwrap();
 }

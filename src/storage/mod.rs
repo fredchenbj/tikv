@@ -1326,6 +1326,8 @@ impl<E: Engine> Storage<E> {
                 Self::async_snapshot(engine, &ctx)
                     .and_then(move |snapshot: E::Snap| {
                         tls_processing_read_observe_duration(CMD, || {
+                            let table = keys::get_table_from_key(&keys[0]);
+                            let comm_duration = tikv_util::time::Instant::now_coarse();
                             let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
 
                             let mut stats = Statistics::default();
@@ -1348,13 +1350,19 @@ impl<E: Engine> Storage<E> {
                                 })
                                 .collect();
 
+                            let time_duration = comm_duration.elapsed();
+                            TABLE_SNAP_PROCESSING_READ_HISTOGRAM_VEC
+                                .with_label_values(&["raw_batch_get", &table])
+                                .observe(tikv_util::time::duration_to_sec(time_duration));
+
                             tls_collect_key_reads(CMD, stats.data.flow_stats.read_keys as usize);
                             tls_collect_read_flow(ctx.get_region_id(), &stats);
                             future::ok(result)
                         })
                     })
                     .then(move |r| {
-                        tls_collect_command_duration(CMD, command_duration.elapsed());
+                        let time_duration = command_duration.elapsed();
+                        tls_collect_command_duration(CMD, time_duration);
                         r
                     })
             })
