@@ -4,7 +4,7 @@ use futures::future::{err, ok};
 use futures::sync::oneshot::{Receiver, Sender};
 use futures::{self, Future};
 use hyper::service::service_fn;
-use hyper::{self, Body, Method, Request, Response, Server, StatusCode};
+use hyper::{self, header, Body, Method, Request, Response, Server, StatusCode};
 #[cfg(target_os = "linux")]
 use pprof;
 #[cfg(target_os = "linux")]
@@ -60,6 +60,23 @@ impl StatusServer {
             .unwrap()
     }
 
+    fn config_handler(
+        config: Arc<TiKvConfig>,
+    ) -> Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send> {
+        let res = match serde_json::to_string(config.as_ref()) {
+            Ok(json) => Response::builder()
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(json))
+                .unwrap(),
+            Err(_) => StatusServer::err_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error",
+            ),
+        };
+        Box::new(ok(res))
+    }
+
+    #[cfg(target_os = "linux")]
     fn extract_thread_name(thread_name: &str) -> String {
         lazy_static! {
             static ref THREAD_NAME_RE: Regex =
@@ -232,14 +249,21 @@ impl StatusServer {
                             }
                         }
 
-                    match (method, path.as_ref()) {
-                        (Method::GET, "/metrics") => Box::new(ok(Response::new(dump().into()))),
-                        (Method::GET, "/status") => Box::new(ok(Response::default())),
-                        (Method::GET, "/debug/pprof/profile") => {
-                            #[cfg(target_os = "linux")]
+                        match (method, path.as_ref()) {
+                            (Method::GET, "/metrics") => Box::new(ok(Response::new(dump().into()))),
+                            (Method::GET, "/status") => Box::new(ok(Response::default())),
+                            (Method::GET, "/debug/pprof/heap") => Self::dump_prof_to_resp(req),
+                            (Method::GET, "/config") => Self::config_handler(config.clone()),
+                            (Method::GET, "/debug/pprof/profile") => {
+                                #[cfg(target_os = "linux")]
                                 { Self::dump_rsperf_to_resp(req) }
-                            #[cfg(not(target_os = "linux"))]
+                                #[cfg(not(target_os = "linux"))]
                                 { Box::new(ok(Response::default())) }
+                            }
+                            _ => Box::new(ok(StatusServer::err_response(
+                                StatusCode::NOT_FOUND,
+                                "path not found",
+                            ))),
                         }
                         _ => Box::new(ok(StatusServer::err_response(
                             StatusCode::NOT_FOUND,
@@ -303,5 +327,281 @@ mod tests {
         }));
         handle.wait().unwrap();
         status_server.stop();
+    }
+
+    #[test]
+    fn test_config_endpoint() {
+        let config = TiKvConfig::default();
+        let mut status_server = StatusServer::new(1, config);
+        let _ = status_server.start("127.0.0.1:0".to_string());
+        let client = Client::new();
+        let uri = Uri::builder()
+            .scheme("http")
+            .authority(status_server.listening_addr().to_string().as_str())
+            .path_and_query("/config")
+            .build()
+            .unwrap();
+        let handle = status_server.thread_pool.spawn_handle(lazy(move || {
+            client
+                .get(uri)
+                .and_then(|resp| {
+                    assert_eq!(resp.status(), StatusCode::OK);
+                    resp.into_body().concat2()
+                })
+                .map(|body| {
+                    let v = body.to_vec();
+                    let resp_json = String::from_utf8_lossy(&v).to_string();
+                    let cfg = TiKvConfig::default();
+                    serde_json::to_string(&cfg)
+                        .map(|cfg_json| {
+                            assert_eq!(resp_json, cfg_json);
+                        })
+                        .expect("Could not convert TiKvConfig to string");
+                })
+                .map_err(|err| panic!("response status is not OK: {:?}", err))
+        }));
+        handle.wait().unwrap();
+        status_server.stop();
+    }
+
+    #[cfg(feature = "failpoints")]
+    #[test]
+    fn test_status_service_fail_endpoints() {
+        let _guard = fail::FailScenario::setup();
+        let config = TiKvConfig::default();
+        let mut status_server = StatusServer::new(1, config);
+        let _ = status_server.start("127.0.0.1:0".to_string());
+        let client = Client::new();
+        let addr = status_server.listening_addr().to_string();
+
+        let handle = status_server.thread_pool.spawn_handle(lazy(move || {
+            // test add fail point
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail/test_fail_point_name")
+                .build()
+                .unwrap();
+            let mut req = Request::new(Body::from("panic"));
+            *req.method_mut() = Method::PUT;
+            *req.uri_mut() = uri.clone();
+
+            let future_1_add_fail_point = client
+                .request(req)
+                .map(|res| {
+                    assert_eq!(res.status(), StatusCode::OK);
+
+                    let list: Vec<String> = fail::list()
+                        .into_iter()
+                        .map(move |(name, actions)| format!("{}={}", name, actions))
+                        .collect();
+                    assert_eq!(list.len(), 1);
+                    let list = list.join(";");
+                    assert_eq!("test_fail_point_name=panic", list);
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                });
+
+            // test add another fail point
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail/and_another_name")
+                .build()
+                .unwrap();
+            let mut req = Request::new(Body::from("panic"));
+            *req.method_mut() = Method::PUT;
+            *req.uri_mut() = uri.clone();
+
+            let future_2_add_fail_point = client
+                .request(req)
+                .map(|res| {
+                    assert_eq!(res.status(), StatusCode::OK);
+
+                    let list: Vec<String> = fail::list()
+                        .into_iter()
+                        .map(move |(name, actions)| format!("{}={}", name, actions))
+                        .collect();
+                    assert_eq!(2, list.len());
+                    let list = list.join(";");
+                    assert!(list.contains("test_fail_point_name=panic"));
+                    assert!(list.contains("and_another_name=panic"))
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                });
+
+            // test list fail points
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail")
+                .build()
+                .unwrap();
+            let mut req = Request::default();
+            *req.method_mut() = Method::GET;
+            *req.uri_mut() = uri.clone();
+
+            let future_3_list_fail_points = client
+                .request(req)
+                .and_then(|res| {
+                    assert_eq!(res.status(), StatusCode::OK);
+                    res.into_body().concat2()
+                })
+                .map(|chunk| {
+                    let body = chunk.iter().cloned().collect::<Vec<u8>>();
+                    let body = String::from_utf8(body).unwrap();
+                    assert!(body.contains("test_fail_point_name=panic"));
+                    assert!(body.contains("and_another_name=panic"))
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                });
+
+            // test delete fail point
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail/test_fail_point_name")
+                .build()
+                .unwrap();
+            let mut req = Request::default();
+            *req.method_mut() = Method::DELETE;
+            *req.uri_mut() = uri.clone();
+
+            let future_4_delete_fail_points = client
+                .request(req)
+                .map(|res| {
+                    assert_eq!(res.status(), StatusCode::OK);
+
+                    let list: Vec<String> = fail::list()
+                        .into_iter()
+                        .map(move |(name, actions)| format!("{}={}", name, actions))
+                        .collect();
+                    assert_eq!(1, list.len());
+                    let list = list.join(";");
+                    assert_eq!("and_another_name=panic", list);
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                });
+
+            future_1_add_fail_point
+                .then(|_| future_2_add_fail_point)
+                .then(|_| future_3_list_fail_points)
+                .then(|_| future_4_delete_fail_points)
+        }));
+
+        handle.wait().unwrap();
+        status_server.stop();
+    }
+
+    #[cfg(feature = "failpoints")]
+    #[test]
+    fn test_status_service_fail_endpoints_can_trigger_fails() {
+        let _guard = fail::FailScenario::setup();
+        let config = TiKvConfig::default();
+        let mut status_server = StatusServer::new(1, config);
+        let _ = status_server.start("127.0.0.1:0".to_string());
+        let client = Client::new();
+        let addr = status_server.listening_addr().to_string();
+
+        let handle = status_server.thread_pool.spawn_handle(lazy(move || {
+            // test add fail point
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail/a_test_fail_name_nobody_else_is_using")
+                .build()
+                .unwrap();
+            let mut req = Request::new(Body::from("return"));
+            *req.method_mut() = Method::PUT;
+            *req.uri_mut() = uri.clone();
+
+            client
+                .request(req)
+                .map(|res| {
+                    assert_eq!(res.status(), StatusCode::OK);
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                })
+        }));
+
+        handle.wait().unwrap();
+        status_server.stop();
+
+        let true_only_if_fail_point_triggered = || {
+            fail_point!("a_test_fail_name_nobody_else_is_using", |_| { true });
+            false
+        };
+        assert!(true_only_if_fail_point_triggered());
+    }
+
+    #[cfg(not(feature = "failpoints"))]
+    #[test]
+    fn test_status_service_fail_endpoints_should_give_404_when_failpoints_are_disable() {
+        let _guard = fail::FailScenario::setup();
+        let config = TiKvConfig::default();
+        let mut status_server = StatusServer::new(1, config);
+        let _ = status_server.start("127.0.0.1:0".to_string());
+        let client = Client::new();
+        let addr = status_server.listening_addr().to_string();
+
+        let handle = status_server.thread_pool.spawn_handle(lazy(move || {
+            // test add fail point
+            let uri = Uri::builder()
+                .scheme("http")
+                .authority(addr.as_str())
+                .path_and_query("/fail/a_test_fail_name_nobody_else_is_using")
+                .build()
+                .unwrap();
+            let mut req = Request::new(Body::from("panic"));
+            *req.method_mut() = Method::PUT;
+            *req.uri_mut() = uri.clone();
+
+            client
+                .request(req)
+                .map(|res| {
+                    // without feature "failpoints", this PUT endpoint should return 404
+                    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+                })
+                .map_err(|err| {
+                    panic!("response status is not OK: {:?}", err);
+                })
+        }));
+
+        handle.wait().unwrap();
+        status_server.stop();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_extract_thread_name() {
+        assert_eq!(
+            &StatusServer::extract_thread_name("test-name-1"),
+            "test-name"
+        );
+        assert_eq!(
+            &StatusServer::extract_thread_name("grpc-server-5"),
+            "grpc-server"
+        );
+        assert_eq!(
+            &StatusServer::extract_thread_name("rocksdb:bg1000"),
+            "rocksdb:bg"
+        );
+        assert_eq!(
+            &StatusServer::extract_thread_name("raftstore-1-100"),
+            "raftstore"
+        );
+        assert_eq!(
+            &StatusServer::extract_thread_name("snap sender1000"),
+            "snap-sender"
+        );
+        assert_eq!(
+            &StatusServer::extract_thread_name("snap_sender1000"),
+            "snap-sender"
+        );
     }
 }
