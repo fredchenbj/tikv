@@ -4,7 +4,7 @@ use std::error::Error;
 
 use sys_info;
 
-use tikv_util::config::{self, ReadableSize, KB};
+use tikv_util::config::{self, ReadableDuration, ReadableSize, KB};
 
 use engine::rocks::{Cache, LRUCacheOptions, MemoryAllocator};
 
@@ -34,6 +34,7 @@ pub struct Config {
     pub scheduler_concurrency: usize,
     pub scheduler_worker_pool_size: usize,
     pub scheduler_pending_write_threshold: ReadableSize,
+    pub kv_read_slow_perf_context_threshold: ReadableDuration,
     pub block_cache: BlockCacheConfig,
 }
 
@@ -48,6 +49,7 @@ impl Default for Config {
             scheduler_concurrency: DEFAULT_SCHED_CONCURRENCY,
             scheduler_worker_pool_size: if total_cpu >= 16 { 8 } else { 4 },
             scheduler_pending_write_threshold: ReadableSize::mb(DEFAULT_SCHED_PENDING_WRITE_MB),
+            kv_read_slow_perf_context_threshold: ReadableDuration::millis(0),
             block_cache: BlockCacheConfig::default(),
         }
     }

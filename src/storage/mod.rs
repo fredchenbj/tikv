@@ -6,6 +6,7 @@ pub mod kv;
 pub mod lock_manager;
 mod metrics;
 pub mod mvcc;
+mod perf_tracker;
 pub mod readpool_impl;
 pub mod txn;
 pub mod types;
@@ -13,6 +14,7 @@ pub mod types;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::Error as IoError;
 use std::sync::{atomic, Arc, Mutex};
+use std::time::Duration;
 use std::{cmp, error, u64};
 
 use engine::rocks::DB;
@@ -29,6 +31,7 @@ use tikv_util::collections::HashMap;
 use self::gc_worker::GCWorker;
 use self::metrics::*;
 use self::mvcc::Lock;
+use self::perf_tracker::PerfTracker;
 
 pub use self::config::{BlockCacheConfig, Config, DEFAULT_DATA_DIR, DEFAULT_ROCKSDB_SUB_DIR};
 pub use self::gc_worker::{AutoGCConfig, GCSafePointProvider};
@@ -627,6 +630,8 @@ pub struct Storage<E: Engine> {
     max_key_size: usize,
 
     pessimistic_txn_enabled: bool,
+
+    kv_read_slow_perf_context_threshold: Duration,
 }
 
 impl<E: Engine> Clone for Storage<E> {
@@ -646,6 +651,7 @@ impl<E: Engine> Clone for Storage<E> {
             refs: self.refs.clone(),
             max_key_size: self.max_key_size,
             pessimistic_txn_enabled: self.pessimistic_txn_enabled,
+            kv_read_slow_perf_context_threshold: self.kv_read_slow_perf_context_threshold,
         }
     }
 }
@@ -712,6 +718,10 @@ impl<E: Engine> Storage<E> {
             refs: Arc::new(atomic::AtomicUsize::new(1)),
             max_key_size: config.max_key_size,
             pessimistic_txn_enabled,
+            kv_read_slow_perf_context_threshold: config
+                .kv_read_slow_perf_context_threshold
+                .clone()
+                .into(),
         })
     }
 
@@ -1317,6 +1327,7 @@ impl<E: Engine> Storage<E> {
     ) -> impl Future<Item = Vec<Result<KvPair>>, Error = Error> {
         const CMD: &str = "raw_batch_get";
         let priority = readpool::Priority::from(ctx.get_priority());
+        let slow_threshold = self.kv_read_slow_perf_context_threshold;
 
         let res = self.read_pool.spawn_handle(priority, move || {
             tls_collect_command_count(CMD, priority);
@@ -1329,6 +1340,12 @@ impl<E: Engine> Storage<E> {
                             let table = keys::get_table_from_key(&keys[0]);
                             let comm_duration = tikv_util::time::Instant::now_coarse();
                             let keys: Vec<Key> = keys.into_iter().map(Key::from_encoded).collect();
+
+                            let perf_tracker = if slow_threshold > Duration::from_millis(0) {
+                                Some(PerfTracker::new(CMD, slow_threshold))
+                            } else {
+                                None
+                            };
 
                             let mut stats = Statistics::default();
                             let result: Vec<Result<KvPair>> = keys
@@ -1357,6 +1374,9 @@ impl<E: Engine> Storage<E> {
 
                             tls_collect_key_reads(CMD, stats.data.flow_stats.read_keys as usize);
                             tls_collect_read_flow(ctx.get_region_id(), &stats);
+                            if slow_threshold > Duration::from_millis(0) && perf_tracker.is_some() {
+                                tls_collect_perf_stats(CMD, &perf_tracker.unwrap().record());
+                            }
                             future::ok(result)
                         })
                     })

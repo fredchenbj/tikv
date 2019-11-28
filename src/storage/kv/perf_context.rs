@@ -11,6 +11,8 @@ pub struct PerfStatisticsFields {
     pub block_cache_hit_count: usize,
     pub block_read_count: usize,
     pub block_read_byte: usize,
+    pub internal_merge_count: usize,
+    pub merge_operator_time_nanos: usize,
 }
 
 /// Store statistics we need. Data comes from RocksDB's `PerfContext`.
@@ -38,6 +40,8 @@ impl PerfStatisticsInstant {
             block_cache_hit_count: perf_context.block_cache_hit_count() as usize,
             block_read_count: perf_context.block_read_count() as usize,
             block_read_byte: perf_context.block_read_byte() as usize,
+            internal_merge_count: perf_context.internal_merge_count() as usize,
+            merge_operator_time_nanos: perf_context.merge_operator_time_nanos() as usize,
         })
     }
 
@@ -103,6 +107,8 @@ mod tests {
             block_cache_hit_count: 3,
             block_read_count: 4,
             block_read_byte: 5,
+            internal_merge_count: 2,
+            merge_operator_time_nanos: 2,
         };
         let f2 = PerfStatisticsFields {
             internal_key_skipped_count: 2,
@@ -110,6 +116,8 @@ mod tests {
             block_cache_hit_count: 5,
             block_read_count: 7,
             block_read_byte: 11,
+            internal_merge_count: 2,
+            merge_operator_time_nanos: 2,
         };
         let f3 = f1 + f2;
         assert_eq!(f3.internal_key_skipped_count, 3);
@@ -142,6 +150,8 @@ mod tests {
             block_cache_hit_count: 3,
             block_read_count: 4,
             block_read_byte: 5,
+            internal_merge_count: 2,
+            merge_operator_time_nanos: 2,
         });
         assert_eq!(stats.block_cache_hit_count, 3);
         stats.block_cache_hit_count = 6;

@@ -8,6 +8,7 @@ use prometheus::local::*;
 
 use crate::pd::PdTask;
 use crate::server::readpool::{self, Builder, Config, ReadPool};
+use crate::storage::kv::PerfStatisticsDelta;
 use crate::storage::kv::{destroy_tls_engine, set_tls_engine};
 use tikv_util::collections::HashMap;
 use tikv_util::worker::FutureScheduler;
@@ -22,6 +23,7 @@ pub struct StorageLocalMetrics {
     local_kv_command_counter_vec: LocalIntCounterVec,
     local_sched_commands_pri_counter_vec: LocalIntCounterVec,
     local_kv_command_scan_details: LocalIntCounterVec,
+    local_rocksdb_perf_stats: LocalIntCounterVec,
     local_read_flow_stats: HashMap<u64, crate::storage::FlowStatistics>,
 }
 
@@ -34,6 +36,7 @@ thread_local! {
             local_kv_command_counter_vec: KV_COMMAND_COUNTER_VEC.local(),
             local_sched_commands_pri_counter_vec: SCHED_COMMANDS_PRI_COUNTER_VEC.local(),
             local_kv_command_scan_details: KV_COMMAND_SCAN_DETAILS.local(),
+            local_rocksdb_perf_stats: KV_ROCKSDB_PERF_COUNTER.local(),
             local_read_flow_stats: HashMap::default(),
         }
     );
@@ -82,6 +85,7 @@ fn tls_flush(pd_sender: &FutureScheduler<PdTask>) {
         storage_metrics.local_kv_command_counter_vec.flush();
         storage_metrics.local_sched_commands_pri_counter_vec.flush();
         storage_metrics.local_kv_command_scan_details.flush();
+        storage_metrics.local_rocksdb_perf_stats.flush();
 
         // Report PD metrics
         if storage_metrics.local_read_flow_stats.is_empty() {
@@ -173,5 +177,44 @@ pub fn tls_collect_read_flow(region_id: u64, statistics: &crate::storage::Statis
             .or_insert_with(crate::storage::FlowStatistics::default);
         flow_stats.add(&statistics.write.flow_stats);
         flow_stats.add(&statistics.data.flow_stats);
+    });
+}
+
+#[inline]
+pub fn tls_collect_perf_stats(cmd: &str, statistics: &PerfStatisticsDelta) {
+    TLS_STORAGE_METRICS.with(|m| {
+        let mut storage_metrics = m.borrow_mut();
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "internal_key_skipped_count"])
+            .inc_by(statistics.internal_key_skipped_count as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "internal_delete_skipped_count"])
+            .inc_by(statistics.internal_delete_skipped_count as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "block_cache_hit_count"])
+            .inc_by(statistics.block_cache_hit_count as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "block_read_count"])
+            .inc_by(statistics.block_read_count as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "block_read_byte"])
+            .inc_by(statistics.block_read_byte as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "block_read_byte"])
+            .inc_by(statistics.block_read_byte as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "internal_merge_count"])
+            .inc_by(statistics.internal_merge_count as i64);
+        storage_metrics
+            .local_rocksdb_perf_stats
+            .with_label_values(&[cmd, "merge_operator_time_nanos"])
+            .inc_by(statistics.merge_operator_time_nanos as i64);
     });
 }

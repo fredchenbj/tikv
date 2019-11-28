@@ -139,6 +139,10 @@
 ## When the pending write bytes exceeds this threshold, the "scheduler too busy" error is displayed.
 # scheduler-pending-write-threshold = "100MB"
 
+## How long will a KV read request be treated as slow and print slow rocksdb perf context log and push metrics.
+## AS DEFAULT, setting to 0ms will not print any log for requests and so no harm to performance.
+# kv-read-slow-perf-context-threshold = "0ms"
+
 [storage.block-cache]
 ## Whether to create a shared block cache for all RocksDB column families.
 ##

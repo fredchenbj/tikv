@@ -198,4 +198,10 @@ lazy_static! {
             exponential_buckets(0.0005, 2.0, 20).unwrap()
         )
         .unwrap();
+    pub static ref KV_ROCKSDB_PERF_COUNTER: IntCounterVec = register_int_counter_vec!(
+        "tikv_storage_rocksdb_perf",
+        "Total number of RocksDB internal operations from PerfContext",
+        &["type", "metric"]
+    )
+    .unwrap();
 }
