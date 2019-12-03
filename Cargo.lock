@@ -1015,9 +1015,9 @@ checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
 
 [[package]]
 name = "grpcio"
-version = "0.4.5"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf45c98940795d83354880f073f3a2a2a995f50d3a3e43247ea23eca978d6574"
+checksum = "9ac757a85603e4f8c40a9f94be06a5ad412acab80b39b4e8895ca931b6619910"
 dependencies = [
  "futures",
  "grpcio-sys",
@@ -1038,9 +1038,9 @@ dependencies = [
 
 [[package]]
 name = "grpcio-sys"
-version = "0.4.5"
+version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6a31d8b4769d18e20de167e3c0ccae6b7dd506dfff78d323c2166e76efbe408"
+checksum = "7b2f22fb0327f153acccedbe91894dd0fb15bb6f202d8195665cd206af0402b0"
 dependencies = [
  "cc",
  "cmake",
@@ -3235,7 +3235,7 @@ dependencies = [
 
 [[package]]
 name = "tikv"
-version = "3.0.4-6"
+version = "3.0.7"
 dependencies = [
  "arrow",
  "backtrace 0.2.3",
