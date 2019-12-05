@@ -475,7 +475,20 @@ pub fn get_raw_cf_option(cf: &str, cache: &Option<Cache>) -> (ColumnFamilyOption
     let json_value;
     let res_option = if u.is_ok() {
         json_value = u.unwrap();
-        json_value["node"]["nodes"][0]["value"].as_str()
+        let json_array = &json_value["node"]["nodes"];
+
+        let len = json_array.len();
+        let mut max_key = json_array[0]["key"].as_str().unwrap();
+        let mut max_index = 0;
+        for i in 1..len {
+            let key = json_array[i]["key"].as_str().unwrap();
+            if key > max_key {
+                max_key = key;
+                max_index = i;
+            }
+        }
+        debug!("max key: {}, max index: {}", max_key, max_index);
+        json_value["node"]["nodes"][max_index]["value"].as_str()
     } else {
         None
     };
