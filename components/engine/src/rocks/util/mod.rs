@@ -182,6 +182,34 @@ fn adjust_dynamic_level_bytes(
     }
 }
 
+fn adjust_num_levels(cf_descs: &[CColumnFamilyDescriptor], cf_options: &mut CFOptions<'_>) {
+    if let Some(ref cf_desc) = cf_descs
+        .iter()
+        .find(|cf_desc| cf_desc.name() == cf_options.cf)
+    {
+        let existed_num_levels = cf_desc.options().get_num_levels();
+        let new_num_levels = cf_options.options.get_num_levels();
+        let num_levels = if existed_num_levels > new_num_levels {
+            warn!(
+                "could not change num_levels to be smaller";
+                "old_value" => existed_num_levels,
+                "new_value" => new_num_levels,
+            );
+            existed_num_levels
+        } else if existed_num_levels < new_num_levels {
+            warn!(
+                "change num_levels to be bigger";
+                "old_value" => existed_num_levels,
+                "new_value" => new_num_levels,
+            );
+            new_num_levels
+        } else {
+            existed_num_levels
+        };
+        cf_options.options.set_num_levels(num_levels as i32);
+    }
+}
+
 pub fn new_engine_opt(
     path: &str,
     mut db_opt: DBOptions,
@@ -248,12 +276,16 @@ pub fn new_engine_opt(
             Some(x) => {
                 let mut tmp = CFOptions::new(x.cf, x.options.clone());
                 adjust_dynamic_level_bytes(&cf_descs, &mut tmp);
+                adjust_num_levels(&cf_descs, &mut tmp);
                 cfs_opts_v.push(tmp.options);
                 cfs_ttl_v.push(0);
             }
             None => {
-                let (cf_opt, ttl) = config::get_raw_cf_option(cf, &cache);
-                cfs_opts_v.push(cf_opt);
+                let (cf_opts, ttl) = config::get_raw_cf_option(cf, &cache);
+                let mut tmp = CFOptions::new(cf, cf_opts.clone());
+                adjust_dynamic_level_bytes(&cf_descs, &mut tmp);
+                adjust_num_levels(&cf_descs, &mut tmp);
+                cfs_opts_v.push(tmp.options);
                 cfs_ttl_v.push(ttl);
                 if !is_with_ttl && ttl > 0 {
                     is_with_ttl = true;

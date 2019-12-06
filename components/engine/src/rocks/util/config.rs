@@ -6,6 +6,8 @@ use std::mem;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::thread;
+use std::time;
 
 use json;
 use reqwest;
@@ -460,14 +462,26 @@ pub fn get_raw_cf_option(cf: &str, cache: &Option<Cache>) -> (ColumnFamilyOption
     let mut config = self::RawCfConfig::default();
     let pds = get_pd_endpoints();
     let mut res = String::from("");
+    let ten_millis = time::Duration::from_millis(10);
 
-    for pd in pds {
+    'a: for pd in pds {
         let url = format!("{}{}{}{}", "http://", pd, "/v2/keys/", cf);
         debug!("url: {}", url);
-        let resp = reqwest::get(url.as_str());
-        if resp.is_ok() {
-            res = resp.unwrap().text().unwrap();
-            break;
+        for _i in 0..5 {
+            let resp = reqwest::get(url.as_str());
+            if resp.is_err() {
+                continue 'a;
+            } else {
+                let mut response = resp.unwrap();
+                if response.status().is_success() {
+                    res = response.text().unwrap();
+                    info!("get config successful");
+                    break 'a;
+                } else {
+                    warn!("get config failed, wait 10ms then try again");
+                    thread::sleep(ten_millis);
+                }
+            }
         }
     }
 
