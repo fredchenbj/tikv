@@ -1643,6 +1643,13 @@ fn main() {
                         .help("Number of threads in one compaction")
                 )
                 .arg(
+                    Arg::with_name("address")
+                        .long("addr")
+                        .short("a")
+                        .takes_value(true)
+                        .help("The node address"),
+                )
+                .arg(
                     Arg::with_name("bottommost")
                         .short("b")
                         .long("bottommost")
@@ -1823,6 +1830,11 @@ fn main() {
                 }
             }
 
+            let (addr, is_node) = match matches.value_of("address") {
+                Some(a) => (a, true),
+                None => ("", false),
+            };
+
             let shard_bits = value_t_or_exit!(matches.value_of("shard-bits"), u8);
             if shard_bits > 8 {
                 process::exit(-1);
@@ -1831,9 +1843,16 @@ fn main() {
             let threads = value_t_or_exit!(matches.value_of("threads"), u32);
             let bottommost = BottommostLevelCompaction::from(matches.value_of("bottommost"));
 
-            return compact_whole_table(
-                &pd_client, &cfg, mgr, db_type, table_id, shard_bits, threads, bottommost,
-            );
+            if is_node {
+                return compact_node_table(
+                    &pd_client, &cfg, mgr, db_type, table_id, shard_bits, threads, bottommost,
+                    String::from(addr),
+                );
+            } else {
+                return compact_whole_table(
+                    &pd_client, &cfg, mgr, db_type, table_id, shard_bits, threads, bottommost,
+                );
+            }
         }
 
         let _ = app.print_help();
@@ -2250,13 +2269,47 @@ fn compact_whole_table(
                 let start_key = split_start_key(&table_byte, shard_byte);
                 let cf =
                     tikv::raftstore::store::keys::get_cf_from_encoded_region_start_key(&start_key);
-                //println!("compact host: {}, cf: {}", addr, cf);
 
                 debug_executor.compact(Some(&addr), db_type, &cf, None, None, threads, bottommost);
             }
         });
         handles.push(h);
     }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+}
+
+fn compact_node_table(
+    _pd_client: &RpcClient,
+    cfg: &TiKvConfig,
+    mgr: Arc<SecurityManager>,
+    db_type: DBType,
+    table_id: Vec<u8>,
+    shard_bits: u8,
+    threads: u32,
+    bottommost: BottommostLevelCompaction,
+    addr: String,
+) {
+    let mut handles = Vec::new();
+    let max_count: u8 = 1 << shard_bits;
+
+    let cfg = cfg.clone();
+    let mgr = Arc::clone(&mgr);
+
+    let table_byte = table_id.clone();
+    let h = thread::spawn(move || {
+        let debug_executor = new_debug_executor(None, None, Some(&addr), &cfg, mgr);
+        for i in 0..max_count {
+            let shard_byte = i;
+            let start_key = split_start_key(&table_byte, shard_byte);
+            let cf = tikv::raftstore::store::keys::get_cf_from_encoded_region_start_key(&start_key);
+
+            debug_executor.compact(Some(&addr), db_type, &cf, None, None, threads, bottommost);
+        }
+    });
+    handles.push(h);
 
     for h in handles {
         h.join().unwrap();
