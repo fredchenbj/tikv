@@ -60,22 +60,6 @@ impl StatusServer {
             .unwrap()
     }
 
-    fn config_handler(
-        config: Arc<TiKvConfig>,
-    ) -> Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send> {
-        let res = match serde_json::to_string(config.as_ref()) {
-            Ok(json) => Response::builder()
-                .header(header::CONTENT_TYPE, "application/json")
-                .body(Body::from(json))
-                .unwrap(),
-            Err(_) => StatusServer::err_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error",
-            ),
-        };
-        Box::new(ok(res))
-    }
-
     #[cfg(target_os = "linux")]
     fn extract_thread_name(thread_name: &str) -> String {
         lazy_static! {
@@ -249,21 +233,14 @@ impl StatusServer {
                             }
                         }
 
-                        match (method, path.as_ref()) {
-                            (Method::GET, "/metrics") => Box::new(ok(Response::new(dump().into()))),
-                            (Method::GET, "/status") => Box::new(ok(Response::default())),
-                            (Method::GET, "/debug/pprof/heap") => Self::dump_prof_to_resp(req),
-                            (Method::GET, "/config") => Self::config_handler(config.clone()),
-                            (Method::GET, "/debug/pprof/profile") => {
-                                #[cfg(target_os = "linux")]
+                    match (method, path.as_ref()) {
+                        (Method::GET, "/metrics") => Box::new(ok(Response::new(dump().into()))),
+                        (Method::GET, "/status") => Box::new(ok(Response::default())),
+                        (Method::GET, "/debug/pprof/profile") => {
+                            #[cfg(target_os = "linux")]
                                 { Self::dump_rsperf_to_resp(req) }
-                                #[cfg(not(target_os = "linux"))]
+                            #[cfg(not(target_os = "linux"))]
                                 { Box::new(ok(Response::default())) }
-                            }
-                            _ => Box::new(ok(StatusServer::err_response(
-                                StatusCode::NOT_FOUND,
-                                "path not found",
-                            ))),
                         }
                         _ => Box::new(ok(StatusServer::err_response(
                             StatusCode::NOT_FOUND,

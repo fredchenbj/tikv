@@ -1845,7 +1845,14 @@ fn main() {
 
             if is_node {
                 return compact_node_table(
-                    &pd_client, &cfg, mgr, db_type, table_id, shard_bits, threads, bottommost,
+                    &pd_client,
+                    &cfg,
+                    mgr,
+                    db_type,
+                    table_id,
+                    shard_bits,
+                    threads,
+                    bottommost,
                     String::from(addr),
                 );
             } else {
