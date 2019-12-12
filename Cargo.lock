@@ -3235,7 +3235,7 @@ dependencies = [
 
 [[package]]
 name = "tikv"
-version = "3.0.7"
+version = "3.0.7-1"
 dependencies = [
  "arrow",
  "backtrace 0.2.3",
