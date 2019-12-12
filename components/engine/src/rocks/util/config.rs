@@ -607,6 +607,33 @@ pub fn get_raw_cf_option(cf: &str, cache: &Option<Cache>) -> (ColumnFamilyOption
                         });
                     }
                 }
+                "compression_per_level" => {
+                    if let Some(exp) = value.as_str() {
+                        //let exp = "tp = [\"no\", \"no\", \"no\", \"no\", \"no\", \"no\", \"no\"]";
+
+                        #[derive(Serialize, Deserialize)]
+                        struct CompressionTypeHolder {
+                            #[serde(with = "compression_type_level_serde")]
+                            tp: [DBCompressionType; 7],
+                        }
+
+                        let src = [
+                            DBCompressionType::Lz4,
+                            DBCompressionType::Lz4,
+                            DBCompressionType::Lz4,
+                            DBCompressionType::Lz4,
+                            DBCompressionType::Lz4,
+                            DBCompressionType::Zstd,
+                            DBCompressionType::Zstd,
+                        ];
+                        let h: CompressionTypeHolder = toml::from_str(exp).unwrap_or_else(|e| {
+                            warn!("invalid compression_per_level: {}", e);
+                            CompressionTypeHolder { tp: src }
+                        });
+
+                        config.compression_per_level = h.tp;
+                    }
+                }
                 "write_buffer_size" => {
                     if let Some(v) = value.as_str() {
                         let size = v.parse::<u64>().unwrap_or_else(|e| {
