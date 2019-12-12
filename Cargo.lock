@@ -210,7 +210,7 @@ dependencies = [
 [[package]]
 name = "bzip2-sys"
 version = "0.1.7"
-source = "git+https://github.com/alexcrichton/bzip2-rs.git#91d576f75a3cb8acd8b741312c97c9fbd7c3df6a"
+source = "git+https://github.com/alexcrichton/bzip2-rs.git#96cc4909a1a180a62ca8e3716785dc6f7a7f9ac0"
 dependencies = [
  "cc",
  "libc",
@@ -1448,7 +1448,7 @@ dependencies = [
 [[package]]
 name = "librocksdb_sys"
 version = "0.1.0"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#1957daf23168ab8c7cd8ad6681c4e38825d9a972"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#dc50825e8a57b225bcaa13f167976921487de7e8"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -1465,7 +1465,7 @@ dependencies = [
 [[package]]
 name = "libtitan_sys"
 version = "0.0.1"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#1957daf23168ab8c7cd8ad6681c4e38825d9a972"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#dc50825e8a57b225bcaa13f167976921487de7e8"
 dependencies = [
  "bzip2-sys",
  "cc",
@@ -1542,8 +1542,8 @@ dependencies = [
 
 [[package]]
 name = "lz4-sys"
-version = "1.8.0"
-source = "git+https://github.com/busyjay/lz4-rs.git?branch=adjust-build#41509fea212e9ca55c1f6c53d4fd1ddf28cdf689"
+version = "1.8.3"
+source = "git+https://github.com/busyjay/lz4-rs.git?branch=adjust-build#5a8afe4010c67899fc7af876a58d67fd6269bf81"
 dependencies = [
  "cc",
  "libc",
@@ -2169,7 +2169,7 @@ version = "2.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb1a649b870f7fe03c965bf2fa6728361f6abbb6f3b72079515af8cb56d769cf"
 dependencies = [
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2272,7 +2272,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43648985159f2c4c25f934182a63b0dd4c5cc06a5ae96e5d40e12c3a3785abde"
 dependencies = [
  "fxhash",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf",
  "quick-error 1.2.2",
  "rand 0.5.5",
@@ -2625,7 +2625,7 @@ checksum = "2089e4031214d129e201f8c3c8c2fe97cd7322478a0d1cdf78e7029b0042efdb"
 [[package]]
 name = "rocksdb"
 version = "0.3.0"
-source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#1957daf23168ab8c7cd8ad6681c4e38825d9a972"
+source = "git+https://github.com/fredchenbj/rust-rocksdb.git?branch=fredchenbj/release-3.0.7#dc50825e8a57b225bcaa13f167976921487de7e8"
 dependencies = [
  "crc",
  "libc",
@@ -3990,8 +3990,8 @@ dependencies = [
 
 [[package]]
 name = "zstd-sys"
-version = "1.4.14+zstd.1.4.3"
-source = "git+https://github.com/gyscos/zstd-rs.git#8656e6baedb61f71abba458ecd88f363ff6458f5"
+version = "1.4.15+zstd.1.4.4"
+source = "git+https://github.com/gyscos/zstd-rs.git#c0e8491d460311117bacd0262374f8b973ec8b69"
 dependencies = [
  "cc",
  "glob",
