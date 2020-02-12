@@ -1364,7 +1364,7 @@ dependencies = [
 [[package]]
 name = "kvproto"
 version = "0.0.1"
-source = "git+https://github.com/fredchenbj/kvproto.git?branch=fredchenbj/release-3.0.3#85b070b8ca54538c7d87620b84b3ab2e0f9c11b5"
+source = "git+https://github.com/fredchenbj/kvproto.git?branch=fredchenbj/release-3.0.3#30fdf818f4e515ec5e9623f20e8fe3072ca76429"
 dependencies = [
  "futures",
  "grpcio",
@@ -2268,8 +2268,7 @@ dependencies = [
 [[package]]
 name = "raft"
 version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43648985159f2c4c25f934182a63b0dd4c5cc06a5ae96e5d40e12c3a3785abde"
+source = "git+https://github.com/fredchenbj/raft-rs.git?branch=fredchenbj/v0.4.3-1#58ce332082b5636ddc966755924ad54263c7b5ef"
 dependencies = [
  "fxhash",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",

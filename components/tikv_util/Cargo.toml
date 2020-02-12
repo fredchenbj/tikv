@@ -53,7 +53,8 @@ procinfo = { git = "https://github.com/tikv/procinfo-rs" }
 
 [dev-dependencies]
 panic_hook = { path = "../panic_hook" }
-raft = "0.4"
+#raft = "0.4"
+raft = { git = "https://github.com/fredchenbj/raft-rs.git", branch="fredchenbj/v0.4.3-1" }
 
 [[bench]]
 name = "channel"

@@ -11,7 +11,7 @@ use kvproto::metapb::{self, Region, RegionEpoch};
 use kvproto::pdpb::StoreStats;
 use kvproto::raft_cmdpb::{AdminCmdType, AdminRequest};
 use kvproto::raft_serverpb::{PeerState, RaftMessage, RegionLocalState};
-use raft::{Ready, StateRole};
+use raft::{Ready, StateRole, Error as RaftError};
 use std::collections::BTreeMap;
 use std::collections::Bound::{Excluded, Included, Unbounded};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -50,8 +50,9 @@ use crate::raftstore::store::worker::{
 };
 use crate::raftstore::store::{
     util, Callback, CasualMessage, PeerMsg, RaftCommand, SignificantMsg, SnapManager,
-    SnapshotDeleter, StoreMsg, StoreTick,
+    SnapshotDeleter, StoreMsg, StoreTick, write_peer_state,
 };
+use crate::raftstore::errors::Error;
 use crate::raftstore::Result;
 use crate::storage::kv::{CompactedEvent, CompactionListener};
 use engine::Engines;
@@ -748,13 +749,30 @@ impl<T, C> RaftPollerBuilder<T, C> {
                 return Ok(true);
             }
 
-            let (tx, mut peer) = box_try!(PeerFsm::create(
+            let res = PeerFsm::create(
                 store_id,
                 &self.cfg,
                 self.region_scheduler.clone(),
                 self.engines.clone(),
                 region,
-            ));
+            );
+            if res.is_err() {
+                let errs = res.err();
+                match errs {
+                    Some(Error::Raft(RaftError::RegionPanic)) => {
+                        write_peer_state(kv_engine.as_ref(), &kv_wb, region, PeerState::Tombstone, None)
+                            .unwrap();
+                        return Ok(false);
+                    }
+                    Some(e) => {
+                        return Err(box_err!(e));
+                    }
+                    None => {
+                        panic!();
+                    }
+                }
+            }
+            let (tx, mut peer) = res.unwrap();
             if local_state.get_state() == PeerState::Merging {
                 info!("region is merging"; "region" => ?region, "store_id" => store_id);
                 merging_count += 1;
