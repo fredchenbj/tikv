@@ -2,6 +2,7 @@
 
 mod debug;
 mod kv;
+mod codec;
 
 pub use self::debug::Service as DebugService;
 pub use self::kv::Service as KvService;
