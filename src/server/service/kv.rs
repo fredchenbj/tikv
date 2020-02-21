@@ -7,6 +7,7 @@ use crate::coprocessor::Endpoint;
 use crate::raftstore::store::{keys, Callback, CasualMessage};
 use crate::server::load_statistics::ThreadLoad;
 use crate::server::metrics::*;
+use crate::server::service::codec::decode_data;
 use crate::server::snap::Task as SnapTask;
 use crate::server::transport::RaftStoreRouter;
 use crate::server::Error;
@@ -428,6 +429,64 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
                     "err" => ?e
                 );
                 GRPC_MSG_FAIL_COUNTER.raw_batch_get.inc();
+            });
+
+        ctx.spawn(future);
+    }
+
+    fn raw_get_by_index(
+        &mut self,
+        ctx: RpcContext<'_>,
+        req: RawGetByIndexRequest,
+        sink: UnarySink<RawGetByIndexResponse>,
+    ) {
+        let timer = GRPC_MSG_HISTOGRAM_VEC.raw_get_by_index.start_coarse_timer();
+        let future = future_raw_get_by_index(&self.storage, req)
+            .and_then(|res| sink.success(res).map_err(Error::from))
+            .map(|_| timer.observe_duration())
+            .map_err(move |e| {
+                debug!("kv rpc failed";
+                    "request" => "raw_get_by_index",
+                    "err" => ?e
+                );
+                GRPC_MSG_FAIL_COUNTER.raw_get_by_index.inc();
+            });
+
+        ctx.spawn(future);
+    }
+
+    fn raw_batch_get_by_index(
+        &mut self,
+        ctx: RpcContext<'_>,
+        req: RawBatchGetByIndexRequest,
+        sink: UnarySink<RawBatchGetByIndexResponse>,
+    ) {
+        let timer = GRPC_MSG_HISTOGRAM_VEC
+            .raw_batch_get_by_index
+            .start_coarse_timer();
+
+        let command_duration = tikv_util::time::Instant::now_coarse();
+        //let default_table = "default".as_bytes().to_vec();
+        //let key = req.get_keys().get(0).unwrap_or(&default_table);
+        let key = req.get_element_indexes().get(0).unwrap().get_key();
+        let table = keys::get_table_from_key(key);
+        debug!("metric table: {}", table);
+
+        let future = future_raw_batch_get_by_index(&self.storage, req)
+            .and_then(|res| sink.success(res).map_err(Error::from))
+            .map(move |_| {
+                let time_duration = command_duration.elapsed();
+                TABLE_GRPC_COMMAND_DURATION_HISTOGRAM_VEC
+                    .with_label_values(&["raw_batch_get_by_index", &table])
+                    .observe(tikv_util::time::duration_to_sec(time_duration));
+                timer.observe_duration()
+            })
+            .map_err(move |e| {
+                debug!("kv rpc failed";
+                    "request" => "raw_batch_get_by_index",
+                    "err" => ?e
+                );
+                GRPC_MSG_FAIL_COUNTER.raw_batch_get_by_index.inc();
             });
 
         ctx.spawn(future);
@@ -1362,6 +1421,35 @@ fn handle_batch_commands_request<E: Engine>(
                 .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_batch_get.inc());
             response_batch_commands_request(id, resp, tx, timer, timer2);
         }
+        Some(BatchCommandsRequest_Request_oneof_cmd::RawGetByIndex(req)) => {
+            let timer = GRPC_MSG_HISTOGRAM_VEC.raw_get_by_index.start_coarse_timer();
+            let resp = future_raw_get_by_index(&storage, req)
+                .map(oneof!(
+                    BatchCommandsResponse_Response_oneof_cmd::RawGetByIndex
+                ))
+                .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_get_by_index.inc());
+            response_batch_commands_request(id, resp, tx, timer, timer3);
+        }
+        Some(BatchCommandsRequest_Request_oneof_cmd::RawBatchGetByIndex(req)) => {
+            //let default_table = "default".as_bytes().to_vec();
+            //let key = req.get_keys().get(0).unwrap_or(&default_table);
+            let key = req.get_element_indexes().get(0).unwrap().get_key();
+            let table = keys::get_table_from_key(key);
+            debug!("metric table: {}", table);
+
+            let timer = GRPC_MSG_HISTOGRAM_VEC
+                .raw_batch_get_by_index
+                .start_coarse_timer();
+            let timer2 = TABLE_GRPC_COMMAND_DURATION_HISTOGRAM_VEC
+                .with_label_values(&["raw_batch_get_by_index", &table])
+                .start_coarse_timer();
+            let resp = future_raw_batch_get_by_index(&storage, req)
+                .map(oneof!(
+                    BatchCommandsResponse_Response_oneof_cmd::RawBatchGetByIndex
+                ))
+                .map_err(|_| GRPC_MSG_FAIL_COUNTER.raw_batch_get_by_index.inc());
+            response_batch_commands_request(id, resp, tx, timer, timer2);
+        }
         Some(BatchCommandsRequest_Request_oneof_cmd::RawPut(req)) => {
             let timer = GRPC_MSG_HISTOGRAM_VEC.raw_put.start_coarse_timer();
             let resp = future_raw_put(&storage, req)
@@ -1931,6 +2019,31 @@ fn future_raw_get<E: Engine>(
         })
 }
 
+fn future_raw_get_by_index<E: Engine>(
+    storage: &Storage<E>,
+    mut req: RawGetByIndexRequest,
+) -> impl Future<Item = RawGetByIndexResponse, Error = Error> {
+    let indexes = req.take_indexes().into_vec();
+    storage
+        .async_raw_get(req.take_context(), req.take_cf(), req.take_key())
+        .then(move |v| {
+            let mut resp = RawGetByIndexResponse::new();
+            if let Some(err) = extract_region_error(&v) {
+                resp.set_region_error(err);
+            } else {
+                match v {
+                    Ok(Some(val)) => {
+                        let value = decode_data(val, &indexes).unwrap();
+                        resp.set_data(RepeatedField::from_vec(value));
+                    }
+                    Ok(None) => {}
+                    Err(e) => resp.set_error(format!("{}", e)),
+                }
+            }
+            Ok(resp)
+        })
+}
+
 fn future_raw_batch_get<E: Engine>(
     storage: &Storage<E>,
     mut req: RawBatchGetRequest,
@@ -1944,6 +2057,30 @@ fn future_raw_batch_get<E: Engine>(
                 resp.set_region_error(err);
             } else {
                 resp.set_pairs(RepeatedField::from_vec(extract_kv_pairs(v)));
+            }
+            Ok(resp)
+        })
+}
+
+fn future_raw_batch_get_by_index<E: Engine>(
+    storage: &Storage<E>,
+    mut req: RawBatchGetByIndexRequest,
+) -> impl Future<Item = RawBatchGetByIndexResponse, Error = Error> {
+    let mut keys: Vec<Vec<u8>> = Vec::new();
+    let mut index_map = HashMap::new();
+    for key_element in req.take_element_indexes().into_vec() {
+        let k = key_element.key;
+        keys.push(k.clone());
+        index_map.insert(k, key_element.indexes.into_vec());
+    }
+    storage
+        .async_raw_batch_get(req.take_context(), req.take_cf(), keys)
+        .then(|v| {
+            let mut resp = RawBatchGetByIndexResponse::new();
+            if let Some(err) = extract_region_error(&v) {
+                resp.set_region_error(err);
+            } else {
+                resp.set_rows(RepeatedField::from_vec(extract_kv_rows(v, index_map)));
             }
             Ok(resp)
         })
@@ -2296,6 +2433,36 @@ fn extract_kv_pairs(res: storage::Result<Vec<storage::Result<storage::KvPair>>>)
             let mut pair = KvPair::new();
             pair.set_error(extract_key_error(&e));
             vec![pair]
+        }
+    }
+}
+
+fn extract_kv_rows(
+    res: storage::Result<Vec<storage::Result<storage::KvPair>>>,
+    index_map: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+) -> Vec<Row> {
+    match res {
+        Ok(res) => res
+            .into_iter()
+            .map(|r| match r {
+                Ok((key, val)) => {
+                    let mut row = Row::new();
+                    row.set_key(key.clone());
+                    let value = decode_data(val, index_map.get(&key).unwrap()).unwrap();
+                    row.set_data(RepeatedField::from_vec(value));
+                    row
+                }
+                Err(e) => {
+                    let mut row = Row::new();
+                    row.set_error(extract_key_error(&e));
+                    row
+                }
+            })
+            .collect(),
+        Err(e) => {
+            let mut row = Row::new();
+            row.set_error(extract_key_error(&e));
+            vec![row]
         }
     }
 }

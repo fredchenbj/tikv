@@ -22,6 +22,8 @@ make_static_metric! {
         kv_delete_range,
         raw_get,
         raw_batch_get,
+        raw_get_by_index,
+        raw_batch_get_by_index,
         raw_scan,
         raw_batch_scan,
         raw_put,

@@ -25,6 +25,7 @@ use crate::import::SSTImporter;
 use crate::pd::{PdClient, PdRunner, PdTask};
 use crate::raftstore::coprocessor::split_observer::SplitObserver;
 use crate::raftstore::coprocessor::{CoprocessorHost, RegionChangeEvent};
+use crate::raftstore::errors::Error;
 use crate::raftstore::store::config::Config;
 use crate::raftstore::store::fsm::metrics::*;
 use crate::raftstore::store::fsm::peer::{
