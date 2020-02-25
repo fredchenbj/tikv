@@ -466,9 +466,13 @@ impl<T: RaftStoreRouter + 'static, E: Engine> tikvpb_grpc::Tikv for Service<T, E
             .start_coarse_timer();
 
         let command_duration = tikv_util::time::Instant::now_coarse();
-        //let default_table = "default".as_bytes().to_vec();
+        let default_table = "default".as_bytes().to_vec();
         //let key = req.get_keys().get(0).unwrap_or(&default_table);
-        let key = req.get_element_indexes().get(0).unwrap().get_key();
+        let index = req.get_element_indexes().get(0);
+        let key = match index {
+            Some(x) => x.get_key(),
+            None => &default_table,
+        };
         let table = keys::get_table_from_key(key);
         debug!("metric table: {}", table);
 
@@ -1431,9 +1435,13 @@ fn handle_batch_commands_request<E: Engine>(
             response_batch_commands_request(id, resp, tx, timer, timer3);
         }
         Some(BatchCommandsRequest_Request_oneof_cmd::RawBatchGetByIndex(req)) => {
-            //let default_table = "default".as_bytes().to_vec();
+            let default_table = "default".as_bytes().to_vec();
             //let key = req.get_keys().get(0).unwrap_or(&default_table);
-            let key = req.get_element_indexes().get(0).unwrap().get_key();
+            let index = req.get_element_indexes().get(0);
+            let key = match index {
+                Some(x) => x.get_key(),
+                None => &default_table,
+            };
             let table = keys::get_table_from_key(key);
             debug!("metric table: {}", table);
 
